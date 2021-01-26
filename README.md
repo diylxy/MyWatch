@@ -1,0 +1,2 @@
+# MyWatch
+DIY手表，基于STC8A8K64S4A12
