@@ -1,0 +1,461 @@
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listing
+                    -s\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          uint8_t volatile currentmode = 0;
+   4          uint32_t volatile millis = 0;
+   5          uint32_t volatile lastpress_millis = 0;
+   6          
+   7          
+   8          key_t keyUp = {0,0,0,0,0,1};
+   9          key_t keyDown = {0,0,0,0,0,1};
+  10          key_t keyOK = {0,0,0,0,0,1};
+  11          
+  12          bit left_key_pressing = 0;
+  13          bit right_key_pressing = 0;
+  14          bit ignore_next_key = 0;
+  15          bit morse_mode = 0;
+  16          bit morse_finished = 0;
+  17          bit morse_updated = 0;
+  18          bit keep_screen_on = 0;
+  19          bit terminal_enable_serial = 0;
+  20          uint8_t beeping = 0;
+  21          volatile bit alarming = 0;
+  22          bit resetprotect = 0;
+  23          
+  24          void keyClear()
+  25          {
+  26   1        keyUp.pressed = keyDown.pressed = keyOK.pressed = 0;
+  27   1        keyUp.longpressed = keyDown.longpressed = keyOK.longpressed = 0;
+  28   1      }
+  29          
+  30          ////////////////////////////////////////////
+  31          void delay10ms(uint32_t time)
+  32          {
+  33   1        uint32_t oldmillis=millis;
+  34   1        while(millis - oldmillis < time);
+  35   1      }
+  36          
+  37          void Timer0Init(void)   //10毫秒@24.000MHz
+  38          {
+  39   1        AUXR &= 0x7F;   //定时器时钟12T模式
+  40   1        TMOD &= 0xF0;   //设置定时器模式
+  41   1        TL0 = 0xE0;   //设置定时初值
+  42   1        TH0 = 0xB1;   //设置定时初值
+  43   1        TF0 = 0;    //清除TF0标志
+  44   1        ET0 = 1;
+  45   1        TR0 = 1;    //定时器0开始计时
+  46   1      }
+  47          
+  48          void Timer1Init(void)   //5毫秒@24.000MHz
+  49          {
+  50   1        AUXR &= 0xBF;   //定时器时钟12T模式
+  51   1        TMOD &= 0x0F;   //设置定时器模式
+  52   1        TL1 = 0xF0;   //设置定时初值
+  53   1        TH1 = 0xD8;   //设置定时初值
+  54   1        TF1 = 0;    //清除TF1标志
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 2   
+
+  55   1        ET1 = 1;
+  56   1        TR1 = 1;    //定时器1开始计时
+  57   1      }
+  58          
+  59          
+  60          
+  61          
+  62          void GPUUpdate(void) interrupt 3
+  63          {
+  64   1        static uint8_t lasttm = 0;
+  65   1        ++lasttm;
+  66   1        if(lasttm > 2)
+  67   1        {
+  68   2          TR1=0;
+  69   2          lasttm = 0;
+  70   2          oled_clear_buffer();
+  71   2          oled_proc_sprites();
+  72   2          oled_send_buffer();
+  73   2          TR1=1;
+  74   2        }
+  75   1      }
+  76          
+  77          void PowerOff()
+  78          {
+  79   1        oled_wr_cmd(0xAE);
+  80   1        oled_wr_cmd(0xAE);
+  81   1        oled_wr_cmd(0xAE);
+  82   1         ADC_CONTR = 0;
+  83   1        _nop_();
+  84   1        _nop_();
+  85   1        PCON = 0x02;
+  86   1        _nop_();
+  87   1        _nop_();
+  88   1        ADC_CONTR = ADC_POWER;
+  89   1        oled_wr_cmd(0xAF);
+  90   1        oled_wr_cmd(0xAF);
+  91   1        oled_wr_cmd(0xAF);
+  92   1        if(KEY_OK == 0)keyOK.ignore = 1;
+  93   1        if(KEY_DOWN == 0)keyDown.ignore = 1;
+  94   1      }
+  95          
+  96          void main(void)
+  97          {
+  98   1        uint8_t test;
+  99   1        BUZZER = 0;
+ 100   1        Timer0Init();
+ 101   1        WDT_CONTR = 0x24;                           //使能看门狗,溢出时间约为1s
+ 102   1        P2M0 = 0x01;
+ 103   1        ADC_CONTR = ADC_POWER;
+ 104   1        ADCCFG = 0x27;
+ 105   1        IT0 = 1;                                    //使能INT1下降沿中断
+ 106   1        EX0 = 1;                                    //使能INT1中断
+ 107   1        IT1 = 1;                                    //使能INT1下降沿中断
+ 108   1        EX1 = 1;                                    //使能INT1中断
+ 109   1        ES = 1;
+ 110   1        INTCLKO = EX3;                              //使能INT3中断
+ 111   1        EA = 1; 
+ 112   1        keep_screen_on =0;
+ 113   1        flash_init();
+ 114   1        settings_load();
+ 115   1        serial_init();
+ 116   1        serial_set_timeout(100);
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 3   
+
+ 117   1        oled_init();
+ 118   1        Timer1Init();
+ 119   1        oled_init_sprites();
+ 120   1        oled_start_refresh();
+ 121   1        rtc_clear_alarm_flag();
+ 122   1        class_update();
+ 123   1        oled_stop_refresh();
+ 124   1        serial1_sendstr("Hello World");
+ 125   1      
+ 126   1        while(1)
+ 127   1        {
+ 128   2          menu_init();
+ 129   2          menu_add("课程管理");
+ 130   2          menu_add("当前课程");
+ 131   2          menu_add("允许闹钟");
+ 132   2          menu_add("开始倒计时");
+ 133   2          menu_add("音量调节");
+ 134   2          menu_add("灯");
+ 135   2          test = menu_start("主菜单");
+ 136   2          switch (test)
+ 137   2          {
+ 138   3            case 0:
+ 139   3            default:
+ 140   3              TimeMode();
+ 141   3              break;
+ 142   3            case 1:
+ 143   3              class_manager();
+ 144   3              break;
+ 145   3            case 2:
+ 146   3              if(have_class == 1)
+ 147   3              {
+ 148   4                  oled_clear_sprites();
+ 149   4                  print_class(&current_class);
+ 150   4              }
+ 151   3              else
+ 152   3              {
+ 153   4                oled_sprite_change_gb2312(0,0,0,"暂无课程");
+ 154   4              }
+ 155   3              keyClear();
+ 156   3              while(keyUp.pressed == 0);
+ 157   3              keyUp.pressed = 0;
+ 158   3              keyUp.longpressed = 0;
+ 159   3              break;
+ 160   3            case 3:
+ 161   3              settings.enable_alert = menu_ask_yn(NULL);
+ 162   3              if(settings.enable_alert == 0xff)settings.enable_alert=0;
+ 163   3              settings_save();
+ 164   3              break;
+ 165   3            case 4:
+ 166   3              alert_countdown();
+ 167   3              break;
+ 168   3            case 5:
+ 169   3              settings.volume = menu_ask_num(0,30,NULL);
+ 170   3              settings_save();
+ 171   3              alert();
+ 172   3              break;
+ 173   3            case 6:
+ 174   3              menu_init();
+ 175   3              menu_add("开灯");
+ 176   3              menu_add("关灯");
+ 177   3              menu_add("初始化RF");
+ 178   3              test = menu_start("灯");
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 4   
+
+ 179   3              oled_stop_refresh();
+ 180   3              keep_screen_on = 1;
+ 181   3              rf_enable(1);
+ 182   3              delay10ms(10);
+ 183   3              switch (test)
+ 184   3              {
+ 185   4                case 0:break;
+ 186   4                case 1:
+ 187   4                  rf_sendstr("on");
+ 188   4                  rf_sendstr("on");
+ 189   4                  rf_sendstr("on");
+ 190   4                  break;
+ 191   4                case 2:
+ 192   4                  rf_sendstr("of");
+ 193   4                  rf_sendstr("of");
+ 194   4                  rf_sendstr("of");
+ 195   4                  break;
+ 196   4                case 3:
+ 197   4                  rf_set_rfid(LED_RFID);
+ 198   4                  rf_set_dvid(LED_DVID);
+ 199   4                  rf_set_channel(LED_CHANNEL);
+ 200   4                  break;
+ 201   4                default:break;
+ 202   4              }
+ 203   3              delay10ms(20);
+ 204   3              rf_enable(0);
+ 205   3              keep_screen_on = 0;
+ 206   3              break;
+ 207   3          }
+ 208   2        }
+ 209   1      }
+ 210          
+ 211          void Timer0_isr() interrupt 1
+ 212          {
+ 213   1        millis++;
+ 214   1        WDT_CONTR |= 0x10;                      //清看门狗,否则系统复位
+ 215   1        if(beeping != 0)
+ 216   1        {
+ 217   2          P_SW2 |= 0x80;
+ 218   2          PWM0T1 -= PWM0T1 /15; //输出低电平
+ 219   2          if(PWM0T1 == 0)
+ 220   2          {
+ 221   3            beeping = 0;
+ 222   3            PWMCR = 0;
+ 223   3            BUZZER = 0;
+ 224   3          }
+ 225   2          else if(PWM0T1 < 50)
+ 226   2          {
+ 227   3            PWM0T1--;
+ 228   3          }
+ 229   2          P_SW2 &= 0x7f; 
+ 230   2        }
+ 231   1        if(keep_screen_on == 1)
+ 232   1        {
+ 233   2          lastpress_millis = millis;
+ 234   2        }
+ 235   1        else if(millis - lastpress_millis >= AUTO_SLEEP_TIME)
+ 236   1        {
+ 237   2          PowerOff();
+ 238   2        }
+ 239   1        if(morse_mode == 1)
+ 240   1        {
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 5   
+
+ 241   2          morseUpdate();
+ 242   2        }
+ 243   1      
+ 244   1      /////////////////////////////////////按键处理 
+ 245   1        if(KEY_UP == 0)
+ 246   1        {
+ 247   2          if(keyUp.last_state == 1)
+ 248   2          {
+ 249   3            keyUp.last_state = 0;
+ 250   3            keyUp.press_time=0;
+ 251   3          }
+ 252   2          else
+ 253   2          {
+ 254   3            lastpress_millis = millis;
+ 255   3            keyUp.press_time++;
+ 256   3            keyUp.pressing = 1;
+ 257   3            if(keyUp.press_time == KEY_LONG_PRESS_TIME)
+ 258   3            {
+ 259   4              keyUp.longpressed = 1;
+ 260   4            }
+ 261   3          }
+ 262   2        }
+ 263   1        else
+ 264   1        {
+ 265   2          if(keyUp.last_state == 0)
+ 266   2          {
+ 267   3            keyUp.pressing = 0;
+ 268   3            keyUp.last_state = 1;
+ 269   3            keyUp.pressed = 1;
+ 270   3            if((keyUp.press_time >= KEY_LONG_PRESS_TIME) && (keyUp.longpressed == 0))
+ 271   3            {
+ 272   4              keyUp.pressed = 0;
+ 273   4            }
+ 274   3            if(keyUp.ignore == 1)
+ 275   3            {
+ 276   4              keyUp.ignore = 0;
+ 277   4              keyUp.pressed = keyUp.longpressed = 0;
+ 278   4            }
+ 279   3          }
+ 280   2        }
+ 281   1        if(KEY_DOWN == 0)
+ 282   1        {
+ 283   2          if(keyDown.last_state == 1)
+ 284   2          {
+ 285   3            keyDown.last_state = 0;
+ 286   3            keyDown.press_time=0;
+ 287   3          }
+ 288   2          else
+ 289   2          {
+ 290   3            lastpress_millis = millis;
+ 291   3            keyDown.press_time++;
+ 292   3            keyDown.pressing = 1;
+ 293   3            if(keyDown.press_time == KEY_LONG_PRESS_TIME)
+ 294   3            {
+ 295   4              keyDown.longpressed = 1;
+ 296   4            }
+ 297   3          }
+ 298   2        }
+ 299   1        else
+ 300   1        {
+ 301   2          if(keyDown.last_state == 0)
+ 302   2          {
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 6   
+
+ 303   3            keyDown.pressing = 0;
+ 304   3            keyDown.last_state = 1;
+ 305   3            keyDown.pressed = 1;
+ 306   3            if((keyDown.press_time >= KEY_LONG_PRESS_TIME) && (keyDown.longpressed == 0))
+ 307   3            {
+ 308   4              keyDown.pressed = 0;
+ 309   4            }
+ 310   3            if(keyDown.ignore == 1)
+ 311   3            {
+ 312   4              keyDown.ignore = 0;
+ 313   4              keyDown.pressed = keyDown.longpressed = 0;
+ 314   4            }
+ 315   3          }
+ 316   2        }
+ 317   1        if(KEY_OK == 0)
+ 318   1        {
+ 319   2          if(keyOK.last_state == 1)
+ 320   2          {
+ 321   3            keyOK.last_state = 0;
+ 322   3            keyOK.press_time=0;
+ 323   3          }
+ 324   2          else
+ 325   2          {
+ 326   3            lastpress_millis = millis;
+ 327   3            keyOK.press_time++;
+ 328   3            keyOK.pressing = 1;
+ 329   3            if(keyOK.press_time == KEY_LONG_PRESS_TIME)
+ 330   3            {
+ 331   4              keyOK.longpressed = 1;
+ 332   4            }
+ 333   3          }
+ 334   2          if(keyOK.press_time >= KEY_RESTART_TIME)
+ 335   2          {
+ 336   3            if(resetprotect == 0)
+ 337   3            {
+ 338   4              IAP_CONTR = 0x60;
+ 339   4              _nop_();
+ 340   4            }
+ 341   3            else
+ 342   3            {
+ 343   4              beep(SOUND_ERROR_FREQ);
+ 344   4            }
+ 345   3          }
+ 346   2        }
+ 347   1        else
+ 348   1        {
+ 349   2          if(keyOK.last_state == 0)
+ 350   2          {
+ 351   3            keyOK.pressing = 0;
+ 352   3            keyOK.last_state = 1;
+ 353   3            keyOK.pressed = 1;
+ 354   3            if((keyOK.press_time >= KEY_LONG_PRESS_TIME) && (keyOK.longpressed == 0))
+ 355   3            {
+ 356   4              keyOK.pressed = 0;
+ 357   4            }
+ 358   3            if(keyOK.ignore == 1)
+ 359   3            {
+ 360   4              keyOK.ignore = 0;
+ 361   4              keyOK.pressed = keyOK.longpressed = 0;
+ 362   4            }
+ 363   3          }
+ 364   2        }
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 7   
+
+ 365   1        
+ 366   1      ////////////////////////////////////////////
+ 367   1      
+ 368   1      }
+ 369          
+ 370          void INT0_Isr() interrupt 0
+ 371          {
+ 372   1        lastpress_millis = millis;
+ 373   1      }
+ 374          
+ 375          
+ 376          void INT1_Isr() interrupt 2
+ 377          {
+ 378   1        lastpress_millis = millis;
+ 379   1      }
+ 380          
+ 381          
+ 382          
+ 383          void UART1_Isr() interrupt 4
+ 384          {
+ 385   1        static uint8_t count = 0;
+ 386   1        uint8_t last_chr;
+ 387   1        uint8_t chr;
+ 388   1        lastpress_millis = millis;
+ 389   1          if (TI)
+ 390   1          {
+ 391   2              //TI = 0;                                 //清中断标志
+ 392   2          }
+ 393   1          if (RI)
+ 394   1          {
+ 395   2            chr = SBUF;
+ 396   2            RI = 0;                                 //清中断标志  
+ 397   2            if(terminal_enable_serial == 1)
+ 398   2            {
+ 399   3              
+ 400   3              terminal_add_chr(chr);
+ 401   3            }
+ 402   2            if(chr == 0x7f)
+ 403   2            {
+ 404   3              count ++;
+ 405   3              if(count == 100)
+ 406   3              {
+ 407   4                IAP_CONTR = 0x60;
+ 408   4              }
+ 409   3            }
+ 410   2            else
+ 411   2            {
+ 412   3              last_chr = chr;
+ 413   3              count = 0;
+ 414   3            }
+ 415   2          }
+ 416   1      }
+ 417          
+ 418          void INT3_Isr() interrupt 11
+ 419          {
+ 420   1        lastpress_millis = millis;
+ 421   1        alarming = 1;
+ 422   1      }
+ 423          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+C51 COMPILER V9.56.0.0   MAIN                                                              01/26/2021 18:03:17 PAGE 8   
+
+   CODE SIZE        =   1687    ----
+   CONSTANT SIZE    =    103    ----
+   XDATA SIZE       =     39      11
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =     10    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

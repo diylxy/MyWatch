@@ -1,0 +1,78 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Tool Versions:</h2>
+IDE-Version: ¦ÌVision V5.20.0.39
+Copyright (C) 2016 ARM Ltd and ARM Germany GmbH. All rights reserved.
+License Information:  ,  , LIC=AT28G-V59BM-ZJ26U-SPR9A-LT25E-M33HG
+ 
+Tool Versions:
+Toolchain:       PK51 Prof. Developers Kit  Version: 9.56.0.0
+Toolchain Path:  C:\Keil_v5\C51\BIN
+C Compiler:      C51.exe V9.56.0.0
+Assembler:       A51.exe V8.2.5.0
+Linker/Locator:  BL51.exe V6.22
+Library Manager: LIB51.exe V4.30.1.0
+Hex Converter:   OH51.exe V2.7.0.0
+CPU DLL:         S8051.DLL V3.106.0.0
+Dialog DLL:      DP51.DLL V2.63.0.0
+Target DLL:      STCMON51.DLL V1, 0, 8, 0
+Dialog DLL:      TP51.DLL V2.59.0.0
+ 
+<h2>Project:</h2>
+E:\51µ¥Æ¬»ú\STCWatch\watch.uvproj
+Project File Date:  01/20/2021
+
+<h2>Output:</h2>
+Rebuild target 'Target 1'
+assembling STARTUP.A51...
+compiling flash.c...
+flash.c(209): warning C280: 'argc': unreferenced local variable
+flash.c(209): warning C280: 'argv': unreferenced local variable
+compiling main.c...
+compiling oled.c...
+compiling rtc.c...
+compiling internal_iic.c...
+internal_iic.c(113): warning C280: 'argc': unreferenced local variable
+internal_iic.c(113): warning C280: 'argv': unreferenced local variable
+compiling adc.c...
+compiling Terminal.c...
+Terminal.c(290): warning C280: 'argc': unreferenced local variable
+Terminal.c(290): warning C280: 'argv': unreferenced local variable
+compiling morse.c...
+compiling alarm.c...
+compiling settings.c...
+compiling music.c...
+music.c(49): warning C280: 'argc': unreferenced local variable
+music.c(49): warning C280: 'argv': unreferenced local variable
+compiling menu.c...
+compiling serial.c...
+linking...
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_OLED_WR_DAT?OLED
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_OLED_DRAW_LINE?OLED
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_RTC_OFFSET?RTC
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_ISINT?TERMINAL
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?RTC_ALARM_ENABLED?ALARM
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_SERIAL1_GETDATA?SERIAL
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_SERIAL2_GETDATA?SERIAL
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_RF_SET_POWER?SERIAL
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?_OLED_DRAW_BITMAP_FAST?OLED
+    CALLER1: ?C_C51STARTUP
+    CALLER2: ?PR?GPUUPDATE?MAIN
+Program Size: data=39.2 xdata=4578 code=30957
+creating hex file from ".\Objects\watch"...
+".\Objects\watch" - 0 Error(s), 17 Warning(s).
+Build Time Elapsed:  00:00:06
+</pre>
+</body>
+</html>

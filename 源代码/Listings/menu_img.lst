@@ -1,0 +1,393 @@
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MENU_IMG
+OBJECT MODULE PLACED IN .\Objects\menu_img.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE menu_img.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Lis
+                    -tings\menu_img.lst) TABS(2) OBJECT(.\Objects\menu_img.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          
+   4          typedef void (*draw_f)(void);
+   5          typedef void (*display_f)(void);
+   6          
+   7          // Function for buttons to call
+   8          // Return true to only call function once per press
+   9          // Return false to continually call function while the button is pressed
+  10          typedef bool (*button_f)(void);
+  11          
+  12          typedef void (*menu_f)(void);
+  13          typedef void (*itemLoader_f)(uint8_t);
+  14          typedef enum
+  15          {
+  16            MENU_TYPE_STR,
+  17            MENU_TYPE_ICON
+  18          } menu_type_t;
+  19          
+  20          typedef enum
+  21          {
+  22            OPERATION_DRAWICON,
+  23            OPERATION_DRAWNAME_ICON,
+  24            OPERATION_DRAWNAME_STR,
+  25            OPERATION_ACTION
+  26          } operation_t;
+  27          
+  28          typedef struct
+  29          {
+  30            uint8_t dat;
+  31            operation_t op;
+  32            uint8_t id;
+  33          }operation_s;
+  34          
+  35          typedef struct{
+  36            menu_f btn1; // make array
+  37            menu_f btn2;
+  38            menu_f btn3;
+  39            draw_f draw;
+  40            itemLoader_f loader;
+  41          }menuFuncs_t;
+  42          
+  43          typedef struct{
+  44            uint8_t selected;
+  45            uint8_t scroll;
+  46            uint8_t optionCount;
+  47            bool isOpen;
+  48            const char* title;
+  49            menu_type_t menuType;
+  50            menuFuncs_t func;
+  51            menu_f prevMenu;
+  52          }menu_s;
+  53          
+  54          typedef struct{
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 2   
+
+  55            uint8_t lastSelected;
+  56            menu_f last;
+  57          }prev_menu_s;
+  58          
+  59          typedef struct{
+  60            uint8_t now;
+  61            uint8_t val;
+  62          }s_menuNowSetting;
+  63          
+  64          
+  65          s_menuNowSetting setting;
+  66          menu_s menuData;
+  67          static operation_s operation;
+  68          uint8_t code menuBack[] = "BACK";
+  69          
+  70          static void doBtn(menu_f);
+  71          static void drawTitle(void);
+  72          static void loader(operation_t, uint8_t, uint8_t);
+  73          static void menu_drawStr(void);
+  74          static void menu_drawIcon(void);
+  75          static void checkScroll(void);
+  76          static void clear(void);
+  77          
+  78          bool menu_select()
+  79          {
+  80   1          if(!menuData.isOpen)
+  81   1          {
+  82   2            menuData.isOpen = true;
+  83   2            mMainOpen();
+*** WARNING C206 IN LINE 83 OF menu_img.c: 'mMainOpen': missing function-prototype
+  84   2          }
+  85   1          else if(menuData.func.btn2 != NULL)
+  86   1            menuData.func.btn2();
+  87   1        return true;
+  88   1      }
+  89          
+  90          bool menu_down()
+  91          {
+  92   1        doBtn(menuData.func.btn3);
+  93   1        return true;
+  94   1      }
+  95          
+  96          bool menu_up()
+  97          {
+  98   1        doBtn(menuData.func.btn1);
+  99   1        return true;
+ 100   1      }
+ 101          
+ 102          static void doBtn(menu_f btn)
+ 103          {
+ 104   1        if(menuData.isOpen && (!animation_active() || animation_movingOn()) && btn != NULL)
+*** WARNING C206 IN LINE 104 OF menu_img.c: 'animation_active': missing function-prototype
+*** WARNING C206 IN LINE 104 OF menu_img.c: 'animation_movingOn': missing function-prototype
+ 105   1          btn();
+ 106   1      }
+ 107          
+ 108          display_t menu_draw()
+*** ERROR C129 IN LINE 108 OF menu_img.c: missing ';' before 'menu_draw'
+ 109          {
+ 110            display_t busy = DISPLAY_DONE;
+ 111            if(menuData.menuType == MENU_TYPE_STR)
+ 112              menu_drawStr();
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 3   
+
+ 113            else
+ 114              busy = menu_drawIcon();
+ 115          
+ 116            if(menuData.func.draw != NULL)
+ 117              busy = busy || menuData.func.draw() ? DISPLAY_BUSY : DISPLAY_DONE;
+ 118          
+ 119            return busy;
+ 120          }
+ 121          
+ 122          static void drawTitle()
+ 123          {
+ 124            char buff[BUFFSIZE_STR_MENU];
+ 125            memset(buff, ' ', sizeof(buff));
+ 126            strcpy_P(buff + (9 - (strlen_P(menuData.title) / 2)), menuData.title);
+ 127            draw_string(buff, false, 0, 0);
+ 128          }
+ 129          
+ 130          static void loader(operation_t op, uint8_t num, uint8_t dat)
+ 131          {
+ 132            operation.op = op;
+ 133            operation.id = num;
+ 134            operation.dat = dat;
+ 135          
+ 136            if(menuData.func.loader != NULL)
+ 137              menuData.func.loader(num);
+ 138          }
+ 139          
+ 140          static void menu_drawStr()
+ 141          {
+ 142            drawTitle();
+ 143          
+ 144            uint8_t scroll = menuData.scroll;
+ 145            uint8_t count = ((MAX_MENU_ITEMS < menuData.optionCount) ? MAX_MENU_ITEMS : menuData.optionCount) + scrol
+             -l;
+ 146            for(uint8_t i=scroll;i<count;i++)
+ 147            {
+ 148              uint8_t y = 8 + (8 * (i - scroll));
+ 149              if(i == menuData.selected)
+ 150                draw_string(">", false, 0, y);
+ 151              loader(OPERATION_DRAWNAME_STR, i, y);
+ 152            }
+ 153          }
+ 154          
+ 155          static display_t menu_drawIcon()
+ 156          {
+ 157            static int animX = 64;
+ 158          
+ 159            int x = 64 - (48 * menuData.selected);
+ 160          
+ 161            display_t busy = DISPLAY_DONE;
+ 162            uint8_t speed;
+ 163            if(x > animX)
+ 164            {
+ 165              speed = ((x - animX) / 4) + 1;
+ 166              if(speed > 16)
+ 167                speed = 16;
+ 168              animX += speed;
+ 169              if(x <= animX)
+ 170                animX = x;
+ 171              else
+ 172                busy = DISPLAY_BUSY;
+ 173            }
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 4   
+
+ 174            else if(x < animX)
+ 175            {
+ 176              speed = ((animX - x) / 4) + 1;
+ 177              if(speed > 16)
+ 178                speed = 16;
+ 179              animX -= speed;
+ 180              if(x >= animX)
+ 181                animX = x;
+ 182              else
+ 183                busy = DISPLAY_BUSY;
+ 184            }
+ 185          
+ 186            x = animX - 16;
+ 187          
+ 188            drawTitle();
+ 189          
+ 190            draw_bitmap(46, 14, selectbar_top, 36, 8, 0, 0);
+ 191            draw_bitmap(46, 42, selectbar_bottom, 36, 8, 0, 0);
+ 192          
+ 193            LOOP(menuData.optionCount, i)
+ 194            {
+ 195              if(x < FRAME_WIDTH && x > -32)
+ 196                loader(OPERATION_DRAWICON, i, x);
+ 197              x += 48;
+ 198            }
+ 199          
+ 200            loader(OPERATION_DRAWNAME_ICON, menuData.selected, 0);
+ 201          
+ 202            return busy;
+ 203          }
+ 204          
+ 205          void setMenuOption_P(uint8_t num, const char* name, const uint8_t* icon, menu_f actionFunc)
+ 206          {
+ 207            if(num != operation.id)
+ 208              return;
+ 209          
+ 210            char buff[BUFFSIZE_STR_MENU];
+ 211            strcpy_P(buff, name);
+ 212            setMenuOption(num, buff, icon, actionFunc);
+ 213          }
+ 214          
+ 215          #include <math.h>
+ 216          void setMenuOption(uint8_t num, const char* name, const uint8_t* icon, menu_f actionFunc)
+ 217          {
+ 218            if(num != operation.id)
+ 219              return;
+ 220          
+ 221            switch(operation.op)
+ 222            {
+ 223              case OPERATION_DRAWICON:
+ 224                {
+ 225                  uint8_t a = operation.dat;
+ 226                  //if(a > FRAME_WIDTH)
+ 227                  //  a -= (FRAME_WIDTH+32);
+ 228                  float x = ((a/(float)(FRAME_WIDTH-32)) * (M_PI / 2)) + (M_PI / 4);
+ 229                  uint8_t y = (sin(x) * 32);
+ 230                  y = 28; // comment this out for magic
+ 231          
+ 232                  draw_bitmap(operation.dat, y + 4 - 16, icon != NULL ? icon : menu_default, 32, 32, NOINVERT, 0);
+ 233                }
+ 234                break;
+ 235              case OPERATION_DRAWNAME_ICON:
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 5   
+
+ 236                draw_string((char*)name, false, 0, FRAME_HEIGHT - 8);
+ 237                break;
+ 238              case OPERATION_DRAWNAME_STR:
+ 239                draw_string((char*)name, false, 6, operation.dat);  
+ 240                break;
+ 241              case OPERATION_ACTION:
+ 242                if(actionFunc != NULL)
+ 243                  operation.dat ? beginAnimation(actionFunc) : actionFunc();
+ 244                break;
+ 245              default:
+ 246                break;
+ 247            }
+ 248          }
+ 249          
+ 250          bool menu_isOpen()
+ 251          {
+ 252            return menuData.isOpen;
+ 253          }
+ 254          
+ 255          void menu_close()
+ 256          {
+ 257            clear();
+ 258            menuData.isOpen = false;
+ 259            menuData.prevMenu = NULL;
+ 260            display_load(); // Move somewhere else, sometimes we don't want to load the watch face when closing the m
+             -enu
+ 261          }
+ 262          
+ 263          void setPrevMenuOpen(prev_menu_s* prevMenu, menu_f newPrevMenu)
+ 264          {
+ 265            if(menuData.prevMenu != newPrevMenu) // Make sure new and old menu funcs are not the same, otherwise we g
+             -et stuck in a menu loop
+ 266              prevMenu->last = menuData.prevMenu; // Save previous menu open func
+ 267            menuData.selected = prevMenu->lastSelected; // 
+ 268            menuData.prevMenu = newPrevMenu; // Set new menu open func
+ 269          }
+ 270          
+ 271          void setPrevMenuExit(prev_menu_s* prevMenu)
+ 272          {
+ 273            if(!exitSelected()) // Opened new menu, save selected item
+ 274              prevMenu->lastSelected = menuData.selected;
+ 275            else
+ 276            {
+ 277              prevMenu->lastSelected = 0; // Reset selected item
+ 278              menuData.prevMenu = prevMenu->last; // 
+ 279            }
+ 280          }
+ 281          
+ 282          bool exitSelected()
+ 283          {
+ 284            return menuData.selected == menuData.optionCount - 1;
+ 285          }
+ 286          
+ 287          static void clear()
+ 288          {
+ 289            memset(&menuData.func, 0, sizeof(menuFuncs_t));
+ 290          }
+ 291          
+ 292          void addBackOption()
+ 293          {
+ 294            setMenuOption_P(menuData.optionCount - 1, menuBack, menu_exit, back);
+ 295          }
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 6   
+
+ 296          
+ 297          void back()
+ 298          {
+ 299            menuData.prevMenu != NULL ? menuData.prevMenu() : mMainOpen();
+ 300          //  mMainOpen();
+ 301          }
+ 302          
+ 303          void beginAnimation(menu_f onComplete)
+ 304          {
+ 305            animation_start(onComplete, ANIM_MOVE_OFF);
+ 306          }
+ 307          
+ 308          void beginAnimation2(menu_f onComplete)
+ 309          {
+ 310            animation_start(onComplete, ANIM_MOVE_ON);
+ 311          }
+ 312          
+ 313          void setMenuInfo(uint8_t optionCount, menu_type_t menuType, const char* title)
+ 314          {
+ 315            clear();
+ 316            menuData.scroll = 0;
+ 317            menuData.selected = 0;
+ 318            menuData.optionCount = optionCount + 1;
+ 319            menuData.menuType = menuType;
+ 320            menuData.title = title;
+ 321          }
+ 322          
+ 323          void setMenuFuncs(menu_f btn1Func, menu_f btn2Func, menu_f btn3Func, itemLoader_f loader)
+ 324          {
+ 325            menuData.func.btn1 = btn1Func;
+ 326            menuData.func.btn2 = btn2Func;
+ 327            menuData.func.btn3 = btn3Func;
+ 328            menuData.func.loader = loader;
+ 329          }
+ 330          
+ 331          void nextOption()
+ 332          {
+ 333            menuData.selected++;
+ 334            if(menuData.selected >= menuData.optionCount)
+ 335              menuData.selected = 0;
+ 336          
+ 337            checkScroll();
+ 338          }
+ 339          
+ 340          void prevOption()
+ 341          {
+ 342            menuData.selected--;
+ 343            if(menuData.selected >= menuData.optionCount)
+ 344              menuData.selected = menuData.optionCount - 1;
+ 345          
+ 346            checkScroll();
+ 347          }
+ 348          
+ 349          void doAction(bool anim)
+ 350          {
+ 351            loader(OPERATION_ACTION, menuData.selected, anim);
+ 352          }
+ 353          
+ 354          static void checkScroll()
+ 355          {
+ 356            uint8_t scroll = menuData.scroll;
+ 357            if(menuData.selected >= scroll + MAX_MENU_ITEMS)
+C51 COMPILER V9.56.0.0   MENU_IMG                                                          01/11/2021 17:57:39 PAGE 7   
+
+ 358              scroll = (menuData.selected + 1) - MAX_MENU_ITEMS;
+ 359            else if(menuData.selected < scroll)
+ 360              scroll = menuData.selected;
+ 361            menuData.scroll = scroll;
+ 362          }
+
+C51 COMPILATION COMPLETE.  3 WARNING(S),  1 ERROR(S)

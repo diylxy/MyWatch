@@ -1,0 +1,96 @@
+C51 COMPILER V9.56.0.0   EEPROM                                                            01/01/2021 16:23:57 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE EEPROM
+OBJECT MODULE PLACED IN .\Objects\eeprom.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE eeprom.c LARGE OPTIMIZE(0,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listi
+                    -ngs\eeprom.lst) TABS(2) OBJECT(.\Objects\eeprom.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          
+   4          
+   5          uint8_t eeprom_read(uint16_t addr)
+   6          {
+   7   1        uint8_t result = 0;
+   8   1        int_iic_start();
+   9   1        int_iic_write(0xA0);
+  10   1        int_iic_write(addr/0xff);
+  11   1        int_iic_write(addr%0xff);
+  12   1        
+  13   1        int_iic_start();
+  14   1        int_iic_write(0xA1);
+  15   1        result = int_iic_read(INTERNAL_IIC_NACK);
+  16   1        int_iic_stop();
+  17   1        return result;
+  18   1      }
+  19          
+  20          void eeprom_write(uint16_t addr, uint8_t dat)
+  21          {
+  22   1        int_iic_start();
+  23   1        int_iic_write(0xA0);
+  24   1        int_iic_write(addr/0xff);
+  25   1        int_iic_write(addr%0xff);
+  26   1        int_iic_write(dat);
+  27   1        int_iic_stop();
+  28   1      }
+  29          
+  30          uint8_t command_eeprom_format(uint8_t argc, uint8_t argv [][COMMAND_MAX_ARG_LEN+1])
+  31          {
+  32   1        uint16_t i;
+  33   1        uint8_t str[14];
+  34   1        uint8_t j;
+  35   1        keep_screen_on=1;
+  36   1        terminal_add_bottom("Are You Sure?");
+  37   1        left_key_pressed = right_key_pressed = 0;
+  38   1        ignore_next_key = 1;
+  39   1        while(left_key_pressed == 0 && right_key_pressed == 0);
+  40   1        
+  41   1        if(left_key_pressed == 1)
+  42   1        {
+  43   2          left_key_pressed = right_key_pressed = 0;
+  44   2          terminal_add_bottom("Formatting...");
+  45   2          terminal_add_bottom("Addr:0000");
+  46   2          for(i = 0; i < 0x7fff; i += 64)
+  47   2          {
+  48   3            if((i & 0xff) == 0)
+  49   3            {
+  50   4              sprintf(str, "Addr:%4x", i);
+  51   4              terminal_modify(0, str);
+  52   4            }
+  53   3            int_iic_start();
+  54   3            int_iic_write(0xA0);
+C51 COMPILER V9.56.0.0   EEPROM                                                            01/01/2021 16:23:57 PAGE 2   
+
+  55   3            int_iic_write(i>>8);
+  56   3            int_iic_write(i & 0xff);
+  57   3            for(j = 0; j != 64; ++j)
+  58   3            {
+  59   4              int_iic_write(0xff);
+  60   4            }
+  61   3            int_iic_stop();
+  62   3          }
+  63   2        }
+  64   1        left_key_pressed = right_key_pressed = 0;
+  65   1        terminal_add_bottom("Done");
+  66   1        keep_screen_on=0;
+  67   1        return COMMAND_OK;
+  68   1      }
+*** WARNING C280 IN LINE 30 OF eeprom.c: 'argc': unreferenced local variable
+*** WARNING C280 IN LINE 30 OF eeprom.c: 'argv': unreferenced local variable
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    470    ----
+   CONSTANT SIZE    =     52    ----
+   XDATA SIZE       =     27    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

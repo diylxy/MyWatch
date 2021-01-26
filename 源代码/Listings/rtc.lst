@@ -1,0 +1,758 @@
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE RTC
+OBJECT MODULE PLACED IN .\Objects\rtc.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE rtc.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings
+                    -\rtc.lst) TABS(2) OBJECT(.\Objects\rtc.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          struct_time current_time;
+   4          unsigned char code DaysInMonth[13]={0,31,28,31,30,31,30,31,31,30,31,30,31}; //二月日期数改成对应的闰年或平
+             -年
+   5          uint8_t * code week_arr[7] = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+   6          
+   7          void delay(uint16_t ms) //@24.000MHz
+   8          {
+   9   1        unsigned char i, j;
+  10   1        while(ms--){
+  11   2          i = 32;
+  12   2          j = 36;
+  13   2          do
+  14   2          {
+  15   3            while (--j);
+  16   3          } while (--i);
+  17   2        }
+  18   1      }
+  19          uint8_t bcd_to_dec(uint8_t bcd)
+  20          {
+  21   1        return 10 * (bcd >> 4) + (bcd & 0x0f);
+  22   1      }
+  23          
+  24          uint8_t dec_to_bcd(uint8_t dec)
+  25          {
+  26   1        return ((dec / 10) << 4 ) + (dec % 10);
+  27   1      }
+  28          
+  29          void rtc_read_time(struct_time *tm)
+  30          {
+  31   1        int_iic_start();   
+  32   1        int_iic_write(RTC_IIC_ADDRESS);   
+  33   1        delay(1);
+  34   1        int_iic_write(0);   
+  35   1        int_iic_start();   
+  36   1        int_iic_write(RTC_IIC_ADDRESS | 0x01);   
+  37   1        tm -> second = bcd_to_dec(int_iic_read(INTERNAL_IIC_ACK));
+  38   1        tm -> minute = bcd_to_dec(int_iic_read(INTERNAL_IIC_ACK));
+  39   1        tm -> hour = bcd_to_dec(int_iic_read(INTERNAL_IIC_ACK));
+  40   1        tm -> day = bcd_to_dec(int_iic_read(INTERNAL_IIC_ACK));
+  41   1        tm -> date = bcd_to_dec(int_iic_read(INTERNAL_IIC_ACK));
+  42   1        tm -> month = bcd_to_dec(int_iic_read(INTERNAL_IIC_ACK));
+  43   1        tm -> year = bcd_to_dec(int_iic_read(INTERNAL_IIC_NACK));
+  44   1        tm -> minute_of_day = tm -> minute + tm -> hour * 60;
+  45   1        int_iic_stop();  
+  46   1      }
+  47          
+  48          void rtc_set_time(struct_time *tm)
+  49          {
+  50   1        int_iic_start();   
+  51   1        int_iic_write(RTC_IIC_ADDRESS);
+  52   1        int_iic_write(0x00);
+  53   1        int_iic_write(dec_to_bcd(tm -> second));
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 2   
+
+  54   1        int_iic_write(dec_to_bcd(tm -> minute));
+  55   1        int_iic_write(dec_to_bcd(tm -> hour));
+  56   1        int_iic_write(dec_to_bcd(tm -> day)); 
+  57   1        int_iic_write(dec_to_bcd(tm -> date)); 
+  58   1        int_iic_write(dec_to_bcd(tm -> month)); 
+  59   1        int_iic_write(dec_to_bcd(tm -> year));
+  60   1        int_iic_stop(); 
+  61   1      }
+  62          
+  63          
+  64          
+  65          
+  66          
+  67          void rtc_offset(int8_t offset)
+  68          {
+  69   1        int_iic_write_addr(RTC_IIC_ADDRESS, 0x10, int_iic_read_addr(RTC_IIC_ADDRESS, 0x10)+offset);
+  70   1      }
+  71          
+  72          void time_to_str(uint8_t *str, struct_time *tm)
+  73          {
+  74   1        str[0] = '2';
+  75   1        str[1] = '0';
+  76   1        str[2] = tm->year / 10 + 0x30;
+  77   1        str[3] = tm->year % 10 + 0x30;
+  78   1        str[4] = '-';
+  79   1        str[5] = tm->month / 10 + 0x30;
+  80   1        str[6] = tm->month % 10 + 0x30;
+  81   1        str[7] = '-';
+  82   1        str[8] = tm->date / 10 + 0x30;
+  83   1        str[9] = tm->date % 10 + 0x30;
+  84   1        str[10] = ' ';
+  85   1        str[11] = tm->day + 0x30;
+  86   1        str[12] = ' ';
+  87   1        str[13] = tm->hour / 10 + 0x30;
+  88   1        str[14] = tm->hour % 10 + 0x30;
+  89   1        str[15] = ':';
+  90   1        str[16] = tm->minute / 10 + 0x30;
+  91   1        str[17] = tm->minute % 10 + 0x30;
+  92   1        str[18] = ':';
+  93   1        str[19] = tm->second / 10 + 0x30;
+  94   1        str[20] = tm->second % 10 + 0x30;
+  95   1        str[21] = 0;
+  96   1      }
+  97          
+  98          
+  99          uint16_t date_countdown(struct_time *time)
+ 100          {
+ 101   1        int16_t calc = 0;
+ 102   1        uint8_t i;
+ 103   1        if(settings.stop_year > time->year)
+ 104   1        {
+ 105   2          calc +=( settings.stop_year - time->year ) * 365;
+ 106   2          for(i = time->year; i < settings.stop_year; ++i)
+ 107   2          {
+ 108   3            if(i % 4 == 0) calc++;
+ 109   3          }
+ 110   2        }
+ 111   1        if(time->month < settings.stop_month )
+ 112   1        {
+ 113   2          for(i = time->month ; i < settings.stop_month ; ++i)
+ 114   2          {
+ 115   3            calc += DaysInMonth[i];
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 3   
+
+ 116   3            if(i == 2)
+ 117   3            {
+ 118   4              if(time->year % 4 == 0) calc++;
+ 119   4            }
+ 120   3          }
+ 121   2        }
+ 122   1        else if(time->month > settings.stop_month )
+ 123   1        {
+ 124   2          for(i =settings.stop_month ; i < time->month ; ++i)
+ 125   2          {
+ 126   3            calc -= DaysInMonth[i];
+ 127   3            if(i == 2)
+ 128   3            {
+ 129   4              if(time->year % 4 == 0) calc--;
+ 130   4            }
+ 131   3          }
+ 132   2        }
+ 133   1        calc += settings.stop_date;
+ 134   1        calc -= time->date;
+ 135   1        if(calc < 0)return 0;
+ 136   1        return calc;
+ 137   1      }
+ 138          //////////////////////////////////////////////////////////////////////////////
+ 139          
+ 140          
+ 141          #define TIME_POS_X 1
+ 142          #define TIME_POS_Y 20
+ 143          #define TICKER_GAP 4
+ 144          
+ 145          typedef struct
+ 146          {
+ 147            uint8_t x;
+ 148            uint8_t y;
+ 149            uint8_t *bitmap;
+ 150            uint8_t w;
+ 151            uint8_t h;
+ 152            uint8_t offsetY;
+ 153            uint8_t val;
+ 154            uint8_t maxVal;
+ 155            bool moving;
+ 156          } tickerData_t;
+ 157          
+ 158          uint8_t code midFont[][57] ={
+ 159            {
+ 160              0xFE,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xFF,0xFF,0xFF,0xFF,0xFE,
+ 161              0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 162              0x7F,0xFF,0xFF,0xFF,0xFF,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xFF,0xFF,0xFF,0xFF,0x7F
+ 163            },
+ 164            {
+ 165              0x00,0x00,0x00,0x00,0x00,0x00,0x20,0x3C,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,
+ 166              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,
+ 167              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00
+ 168            },
+ 169            {
+ 170              0x00,0xFE,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xFF,0xFF,0xFF,0xFF,0xFE,
+ 171              0x00,0x00,0x00,0x00,0x00,0x00,0x80,0xC0,0xE0,0xF0,0xF8,0xFC,0x7E,0x3F,0x1F,0x0F,0x07,0x03,0x01,
+ 172              0xE0,0xF0,0xF8,0xFC,0xFE,0xFF,0xFF,0xFF,0xF7,0xF3,0xF1,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0
+ 173            },
+ 174            {
+ 175              0xFE,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xFF,0xFF,0xFF,0xFF,0xFE,
+ 176              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x1C,0x1C,0x3E,0x3E,0x7E,0x7F,0xF7,0xF7,0xF7,0xE3,0xE3,
+ 177              0x7F,0xFF,0xFF,0xFF,0xFF,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xFF,0xFF,0xFF,0xFF,0x7F
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 4   
+
+ 178            },
+ 179            {
+ 180              0x00,0x00,0x00,0x00,0x00,0x80,0xE0,0xF0,0xFC,0xFF,0x7F,0x1F,0x0F,0x03,0x01,0x00,0x00,0x00,0x00,
+ 181              0x80,0xC0,0xF0,0xFC,0xFE,0xFF,0x3F,0x0F,0x03,0x01,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x00,
+ 182              0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F
+ 183            },
+ 184            {
+ 185              0xFF,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,
+ 186              0x1F,0x1F,0x1F,0x1F,0x1F,0x1E,0x1E,0x1E,0x1E,0x1E,0x1E,0x1E,0x1E,0x1E,0xFE,0xFE,0xFE,0xFE,0xFC,
+ 187              0x7F,0xFF,0xFF,0xFF,0xFF,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xFF,0xFF,0xFF,0xFF,0x7F
+ 188            },
+ 189            {
+ 190              0xFE,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x7F,0x7F,0x7F,0x7F,0x7E,
+ 191              0xFF,0xFF,0xFF,0xFF,0xFF,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0xFC,0xFC,0xFC,0xFC,0xF8,
+ 192              0x7F,0xFF,0xFF,0xFF,0xFF,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xFF,0xFF,0xFF,0xFF,0x7F
+ 193            },
+ 194            {
+ 195              0x7F,0x7F,0x7F,0x7F,0x7F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xCF,0xFF,0xFF,0xFF,0xFF,0x1F,
+ 196              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0xF0,0xFC,0xFF,0xFF,0x3F,0x0F,0x03,0x00,0x00,
+ 197              0x00,0x00,0x00,0x00,0x00,0x80,0xE0,0xF8,0xFE,0xFF,0xFF,0x1F,0x07,0x01,0x00,0x00,0x00,0x00,0x00
+ 198            },
+ 199            {
+ 200              0xFE,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xFF,0xFF,0xFF,0xFF,0xFE,
+ 201              0xC3,0xE7,0xE7,0xF7,0xFF,0x7E,0x3E,0x3E,0x3C,0x1C,0x3C,0x3E,0x3E,0x7E,0xFF,0xF7,0xE7,0xE7,0xC3,
+ 202              0x7F,0xFF,0xFF,0xFF,0xFF,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xFF,0xFF,0xFF,0xFF,0x7F
+ 203            },
+ 204            {
+ 205              0xFE,0xFF,0xFF,0xFF,0xFF,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xFF,0xFF,0xFF,0xFF,0xFE,
+ 206              0x1F,0x3F,0x3F,0x3F,0x3F,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0x3C,0xFF,0xFF,0xFF,0xFF,0xFF,
+ 207              0x7E,0xFE,0xFE,0xFE,0xFE,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xF0,0xFF,0xFF,0xFF,0xFF,0x7F
+ 208            }
+ 209          };
+ 210          uint8_t code small2Font[][22] ={
+ 211            {
+ 212              0xFE,0xFF,0xFF,0x0F,0x07,0x07,0x07,0x0F,0xFF,0xFF,0xFE,
+ 213              0x7F,0xFF,0xFF,0xF0,0xE0,0xE0,0xE0,0xF0,0xFF,0xFF,0x7F,
+ 214            },
+ 215            {
+ 216              0x00,0x00,0x18,0x1C,0x1E,0xFF,0xFF,0xFF,0x00,0x00,0x00,
+ 217              0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0x00,0x00,0x00,
+ 218            },
+ 219            {
+ 220              0x1E,0x1F,0x1F,0x07,0x07,0x87,0xC7,0xE7,0xFF,0x7F,0x3E,
+ 221              0xF0,0xF8,0xFC,0xFE,0xEF,0xE7,0xE3,0xE1,0xE0,0xE0,0xE0,
+ 222            },
+ 223            {
+ 224              0x0E,0x0F,0x0F,0x07,0x07,0x87,0xC7,0xEF,0xFF,0x7F,0x3E,
+ 225              0x70,0xF0,0xF0,0xE0,0xE0,0xE1,0xE3,0xF7,0xFF,0xFE,0x7C,
+ 226            },
+ 227            {
+ 228              0xC0,0xE0,0xF0,0x78,0x3C,0x1E,0xFF,0xFF,0xFF,0x00,0x00,
+ 229              0x1F,0x1F,0x1F,0x1C,0x1C,0x1C,0xFF,0xFF,0xFF,0x1C,0x1C,
+ 230            },
+ 231            {
+ 232              0xFF,0xFF,0xFF,0xC7,0xC7,0xC7,0xC7,0xC7,0xC7,0x87,0x07,
+ 233              0x71,0xF1,0xF1,0xE1,0xE1,0xE1,0xE1,0xF3,0xFF,0x7F,0x3F,
+ 234            },
+ 235            {
+ 236              0xFE,0xFF,0xFF,0x8F,0x87,0x87,0x87,0x87,0x8F,0x8F,0x0E,
+ 237              0x7F,0xFF,0xFF,0xE3,0xE3,0xE3,0xE3,0xE3,0xFF,0xFF,0x7F,
+ 238            },
+ 239            {
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 5   
+
+ 240              0x0F,0x0F,0x0F,0x07,0x07,0x07,0x87,0xC7,0xFF,0xFF,0x7F,
+ 241              0xE0,0xF0,0x78,0x3C,0x1E,0x0F,0x07,0x03,0x01,0x00,0x00,
+ 242            },
+ 243            {
+ 244              0x7E,0xFF,0xFF,0xC7,0x87,0x87,0x87,0xC7,0xFF,0xFF,0x7E,
+ 245              0x7E,0xFF,0xFF,0xE3,0xE1,0xE1,0xE1,0xE3,0xFF,0xFF,0x7E,
+ 246            },
+ 247            {
+ 248              0xFE,0xFF,0xFF,0xC7,0xC7,0xC7,0xC7,0xC7,0xFF,0xFF,0xFE,
+ 249              0x78,0xF9,0xF9,0xE1,0xE1,0xE1,0xE1,0xE1,0xFF,0xFF,0x7F,
+ 250            }
+ 251          };
+ 252          uint8_t code colon[] ={
+ 253            0x00, 0xF8, 0xF8, 0xF8, 0xF8, 0x00,
+ 254            0x00, 0xC3, 0xC3, 0xC3, 0xC3, 0x00,
+ 255            0x00, 0x1F, 0x1F, 0x1F, 0x1F, 0x00
+ 256          };
+ 257          #define div10(val) val / 10
+ 258          #define mod10(val) val % 10
+ 259          
+ 260          #define FONT_COLON_WIDTH 6
+ 261          #define FONT_COLON_HEIGHT 24
+ 262          
+ 263          #define FONT_SMALL2_WIDTH 11
+ 264          #define FONT_SMALL2_HEIGHT 16
+ 265          
+ 266          #define MIDFONT_WIDTH 19
+ 267          #define MIDFONT_HEIGHT 24
+ 268          #define NOINVERT 0
+ 269          
+ 270          uint8_t * code week_eng[] = {
+ 271            "ERR",
+ 272            "Mon",
+ 273            "Tue",
+ 274            "Wed",
+ 275            "Thr",
+ 276            "Feb",
+ 277            "Sat",
+ 278            "Sun",
+ 279          };
+ 280          uint8_t code smallFontAlarm[] ={
+ 281            0x06, 0x7B, 0x85, 0xBC, 0xA4, 0x95, 0x7B, 0x06
+ 282          };
+ 283          
+ 284          static void drawTickerNum(tickerData_t *dat)
+ 285          {
+ 286   1        uint8_t arraySize = (dat->w * dat->h) / 8;
+ 287   1        uint8_t yPos = dat->offsetY;
+ 288   1        const uint8_t *bitmap = &dat->bitmap[dat->val * arraySize];
+ 289   1        uint8_t x = dat->x;
+ 290   1        uint8_t y = dat->y;
+ 291   1      
+ 292   1        if (!dat->moving || yPos == 0 || yPos == 255)
+ 293   1          oled_draw_bitmap_fast(x, y, bitmap, dat->w, dat->h, NOINVERT, 0);
+ 294   1        else
+ 295   1        {
+ 296   2          uint8_t prev = dat->val - 1;
+ 297   2          if (prev == 255)
+ 298   2            prev = dat->maxVal;
+ 299   2      
+ 300   2          oled_draw_bitmap_fast(x, y, bitmap, dat->w, dat->h, NOINVERT, yPos - dat->h - TICKER_GAP);
+ 301   2          oled_draw_bitmap_fast(x, y, &dat->bitmap[prev * arraySize], dat->w, dat->h, NOINVERT, yPos);
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 6   
+
+ 302   2        }
+ 303   1      }
+ 304          
+ 305          void TimeMode_page1()
+ 306          {
+ 307   1        static uint8_t yPos;
+ 308   1        static uint8_t yPos_secs;
+ 309   1        static bool moving = false;
+ 310   1        static bool moving2[5];
+ 311   1        tickerData_t dat;
+ 312   1        static uint8_t hour2;
+ 313   1        static uint8_t mins;
+ 314   1        static uint8_t secs;
+ 315   1        uint16_t tmp16;
+ 316   1        if (current_time.second != secs)
+ 317   1        {
+ 318   2          yPos = 0;
+ 319   2          yPos_secs = 0;
+ 320   2          moving = true;
+ 321   2      
+ 322   2          moving2[0] = div10(current_time.hour) != div10(hour2);
+ 323   2          moving2[1] = mod10(current_time.hour) != mod10(hour2);
+ 324   2          moving2[2] = div10(current_time.minute) != div10(mins);
+ 325   2          moving2[3] = mod10(current_time.minute) != mod10(mins);
+ 326   2          moving2[4] = div10(current_time.second) != div10(secs);
+ 327   2      
+ 328   2          hour2 = current_time.hour;
+ 329   2          mins = current_time.minute;
+ 330   2          secs = current_time.second;
+ 331   2        }
+ 332   1      
+ 333   1        if (moving)
+ 334   1        {
+ 335   2          if (yPos <= 3)
+ 336   2            yPos++;
+ 337   2          else if (yPos <= 6)
+ 338   2            yPos += 3;
+ 339   2          else if (yPos <= 16)
+ 340   2            yPos += 5;
+ 341   2          else if (yPos <= 22)
+ 342   2            yPos += 3;
+ 343   2          else if (yPos <= 24 + TICKER_GAP)
+ 344   2            yPos++;
+ 345   2      
+ 346   2          if (yPos >= MIDFONT_HEIGHT + TICKER_GAP)
+ 347   2            yPos = 255;
+ 348   2      
+ 349   2          if (yPos_secs <= 1)
+ 350   2            yPos_secs++;
+ 351   2          else if (yPos_secs <= 13)
+ 352   2            yPos_secs += 3;
+ 353   2          else if (yPos_secs <= 16 + TICKER_GAP)
+ 354   2            yPos_secs++;
+ 355   2      
+ 356   2          if (yPos_secs >= FONT_SMALL2_HEIGHT + TICKER_GAP)
+ 357   2            yPos_secs = 255;
+ 358   2      
+ 359   2          if (yPos_secs > FONT_SMALL2_HEIGHT + TICKER_GAP && yPos > MIDFONT_HEIGHT + TICKER_GAP)
+ 360   2          {
+ 361   3            yPos = 0;
+ 362   3            yPos_secs = 0;
+ 363   3            moving = false;
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 7   
+
+ 364   3            memset(moving2, false, sizeof(moving2));
+ 365   3          }
+ 366   2        }
+ 367   1      
+ 368   1        // Seconds
+ 369   1        dat.x = 104;
+ 370   1        dat.y = 28;
+ 371   1        dat.bitmap = (uint8_t *)&small2Font;
+ 372   1        dat.w = FONT_SMALL2_WIDTH;
+ 373   1        dat.h = FONT_SMALL2_HEIGHT;
+ 374   1        dat.offsetY = yPos_secs;
+ 375   1        dat.val = div10(current_time.second);
+ 376   1        dat.maxVal = 5;
+ 377   1        dat.moving = moving2[4];
+ 378   1        drawTickerNum(&dat);
+ 379   1      
+ 380   1        dat.x = 116;
+ 381   1        dat.val = mod10(current_time.second);
+ 382   1        dat.maxVal = 9;
+ 383   1        dat.moving = moving;
+ 384   1        drawTickerNum(&dat);
+ 385   1      
+ 386   1        // Set new font dat for hours and minutes
+ 387   1        dat.y = TIME_POS_Y;
+ 388   1        dat.w = MIDFONT_WIDTH;
+ 389   1        dat.h = MIDFONT_HEIGHT;
+ 390   1        dat.bitmap = (uint8_t *)&midFont;
+ 391   1        dat.offsetY = yPos;
+ 392   1      
+ 393   1        // Minutes
+ 394   1        dat.x = 60;
+ 395   1        dat.val = div10(current_time.minute);
+ 396   1        dat.maxVal = 5;
+ 397   1        dat.moving = moving2[2];
+ 398   1        drawTickerNum(&dat);
+ 399   1      
+ 400   1        dat.x = 83;
+ 401   1        dat.val = mod10(current_time.minute);
+ 402   1        dat.maxVal = 9;
+ 403   1        dat.moving = moving2[3];
+ 404   1        drawTickerNum(&dat);
+ 405   1      
+ 406   1        // Hours
+ 407   1        dat.x = 1;
+ 408   1        dat.val = div10(current_time.hour);
+ 409   1        dat.maxVal = 5;
+ 410   1        dat.moving = moving2[0];
+ 411   1        drawTickerNum(&dat);
+ 412   1      
+ 413   1        dat.x = 24;
+ 414   1        dat.val = mod10(current_time.hour);
+ 415   1        dat.maxVal = 9;
+ 416   1        dat.moving = moving2[1];
+ 417   1        drawTickerNum(&dat);
+ 418   1      
+ 419   1        oled_draw_bitmap_fast(TIME_POS_X + 46 + 2, TIME_POS_Y, colon, FONT_COLON_WIDTH, FONT_COLON_HEIGHT, NOINVE
+             -RT, 0);
+ 420   1        
+ 421   1        //日期
+ 422   1        sprintf(oled_tmpstr, "20%02bu-%02bu-%02bu %s", current_time.year, current_time.month, current_time.date, 
+             -week_eng[current_time.day]);
+ 423   1        oled_draw_6x8(21, 0, oled_tmpstr);
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 8   
+
+ 424   1        
+ 425   1        //闹钟
+ 426   1        tmp16 = rtc_get_alarm();
+ 427   1        oled_draw_bitmap_fast(24,55,smallFontAlarm, 8,8,0,0);
+ 428   1        sprintf(oled_tmpstr, "%02bx:%02bx", (uint8_t)(tmp16>>8), (uint8_t)(tmp16&0xff));
+ 429   1        oled_draw_6x8(34, 7, oled_tmpstr);
+ 430   1        if(current_class.ring == MUTE || settings.enable_alert == 0)
+ 431   1          oled_draw_6x8(64,7,"[M]");
+ 432   1        else if(current_class.ring == COUNTDOWN)
+ 433   1          oled_draw_6x8(64,7,"[CD]");
+ 434   1        
+ 435   1        //电池
+ 436   1        ADCUpdate();
+ 437   1      }
+ 438          
+ 439          //////////////////////////////////////////////////////////////////////////////
+ 440          void TimeMode()
+ 441          {
+ 442   1        static uint32_t lastmillis = 0;
+ 443   1        static set_position = 0;
+ 444   1        static int8_t change;
+ 445   1        static uint8_t page = 0;
+ 446   1        while(1)
+ 447   1        {
+ 448   2          timemode:
+ 449   2          keep_screen_on = 0;
+ 450   2          if(alarming == 1)
+ 451   2          {
+ 452   3            alarming = 0;
+ 453   3            rtc_clear_alarm_flag();
+ 454   3            if(settings.enable_alert != 0)
+ 455   3            {
+ 456   4              if(current_class.ring == ONCE)
+ 457   4              {
+ 458   5                alert();
+ 459   5              }
+ 460   4              else if(current_class.ring == COUNTDOWN)
+ 461   4              {
+ 462   5                alert_countdown();
+ 463   5              }
+ 464   4            }
+ 465   3            class_update();
+ 466   3          }
+ 467   2          if(page == 0)
+ 468   2          {
+ 469   3            oled_stop_refresh();
+ 470   3            oled_clear_buffer();
+ 471   3            rtc_read_time(&current_time);
+ 472   3            TimeMode_page1();
+ 473   3            oled_send_buffer();
+ 474   3          }
+ 475   2          else if(page == 1)
+ 476   2          {
+ 477   3            print_class(&current_class);
+ 478   3            sprintf(oled_tmpstr, "倒计时:%u天", date_countdown(&current_time));
+ 479   3            oled_sprite_change_gb2312(4, 0, 64-16, oled_tmpstr);
+ 480   3          }
+ 481   2          if(keyUp.pressed)
+ 482   2          {
+ 483   3            keyUp.pressed = 0;
+ 484   3            if(page == 1)
+ 485   3            {
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 9   
+
+ 486   4              oled_clear_sprites();
+ 487   4              delay10ms(30);
+ 488   4              page = 0;                                   //时间
+ 489   4            }
+ 490   3          }
+ 491   2          if(keyDown.pressed)
+ 492   2          {
+ 493   3            keyDown.pressed = 0;
+ 494   3            oled_start_refresh();
+ 495   3            page = 1;                                   //课程
+ 496   3          }
+ 497   2          if(keyDown.longpressed)
+ 498   2          {
+ 499   3            keyDown.longpressed = 0;
+ 500   3            TerminalMode();
+ 501   3          }
+ 502   2          if(keyOK.pressed)
+ 503   2          {
+ 504   3            keyOK.pressed = 0;
+ 505   3            oled_start_refresh();
+ 506   3            return;
+ 507   3          }
+ 508   2          if(keyUp.longpressed)
+ 509   2          {
+ 510   3            keyUp.longpressed = 0;
+ 511   3            oled_enable_inverse(1);
+ 512   3            oled_stop_refresh();
+ 513   3            oled_inverse(0,0,23,7);
+ 514   3            oled_clear_sprites();
+ 515   3            oled_start_refresh();
+ 516   3            rtc_read_time(&current_time);
+ 517   3            time_to_str(&oled_tmpstr, &current_time);
+ 518   3            oled_sprite_change_6x8(0,0,0,oled_tmpstr);
+ 519   3            oled_start_refresh();
+ 520   3            delay10ms(50);
+ 521   3            while(1)
+ 522   3            {
+ 523   4              if(millis - lastmillis > 30)
+ 524   4              {
+ 525   5                lastmillis = millis;
+ 526   5                if(keyOK.longpressed)
+ 527   5                {
+ 528   6                  keyOK.longpressed = 0;
+ 529   6                  if(set_position != 0)set_position--;
+ 530   6                }
+ 531   5                if(keyOK.pressed)
+ 532   5                {
+ 533   6                  keyOK.pressed = 0;
+ 534   6                  set_position++;
+ 535   6                  if(set_position == 7)
+ 536   6                  {
+ 537   7                    set_position = 0;
+ 538   7                    time_to_str(oled_tmpstr, &current_time);
+ 539   7                    oled_stop_refresh();
+ 540   7                    oled_inverse(20,45,108,47);
+ 541   7                    while(KEY_DOWN == 0 || KEY_UP == 0 || KEY_OK == 0);
+ 542   7                    oled_sprite_change_6x8(3,30,0,"Confirm...");
+ 543   7                    oled_sprite_change_6x8(0,0,35,oled_tmpstr);
+ 544   7                    oled_start_refresh();
+ 545   7                    delay10ms(20);
+ 546   7                    while(1)
+ 547   7                    {
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 10  
+
+ 548   8                      if(KEY_OK == 0)
+ 549   8                      {
+ 550   9                        keyOK.ignore = 1;
+ 551   9                        oled_stop_refresh();
+ 552   9                        oled_clear_sprites();
+ 553   9                        rtc_set_time(&current_time);
+ 554   9                        oled_start_refresh();
+ 555   9                        goto timemode;
+ 556   9                      }
+ 557   8                      else if(KEY_DOWN == 0)
+ 558   8                      {
+ 559   9                        keyDown.ignore = 1;
+ 560   9                        oled_stop_refresh();
+ 561   9                        oled_clear_sprites();
+ 562   9                        oled_start_refresh();
+ 563   9                        goto timemode;
+ 564   9                      }
+ 565   8                      else if(KEY_UP == 0)
+ 566   8                      {
+ 567   9                        keyUp.ignore = 1;
+ 568   9                        break;
+ 569   9                      }
+ 570   8                    }
+ 571   7                  }
+ 572   6                }
+ 573   5                if(keyUp.pressing == 1)
+ 574   5                {
+ 575   6                  keyUp.ignore = 1;
+ 576   6                  change = 1;
+ 577   6                }
+ 578   5                else if(keyDown.pressing == 1)
+ 579   5                {
+ 580   6                  keyDown.ignore = 1;
+ 581   6                  change = -1;
+ 582   6                }
+ 583   5                else
+ 584   5                {
+ 585   6                  change = 0;
+ 586   6                }
+ 587   5                
+ 588   5                switch(set_position)
+ 589   5                {
+ 590   6                  case 0:       //year
+ 591   6                    current_time.year += change;
+ 592   6                    if(current_time.year > 99)current_time.year = 0;
+ 593   6                    oled_inverse(0,0,23,7);
+ 594   6                    break;
+ 595   6                  case 1:
+ 596   6                    current_time.month += change;
+ 597   6                    if(current_time.month > 12)current_time.month = 1;
+ 598   6                    if(current_time.month == 0)current_time.month = 12;
+ 599   6                    oled_inverse(29,0,41,7);
+ 600   6                    break;
+ 601   6                  case 2:
+ 602   6                    current_time.date += change;
+ 603   6                    if(current_time.date > 31)current_time.date = 1;
+ 604   6                    if(current_time.date == 0)current_time.date = 30;
+ 605   6                    oled_inverse(47, 0, 59, 7);
+ 606   6                    break;
+ 607   6                  case 3:
+ 608   6                    current_time.day += change;
+ 609   6                    if(current_time.day > 7) current_time.day = 1;
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 11  
+
+ 610   6                    oled_inverse(65, 0, 71, 7);
+ 611   6                    break;
+ 612   6                  case 4:
+ 613   6                    current_time.hour += change;
+ 614   6                    if(current_time.hour > 23)current_time.hour = 0;
+ 615   6                    oled_inverse(77, 0, 89, 7);
+ 616   6                    break;
+ 617   6                  case 5:
+ 618   6                    current_time.minute += change;
+ 619   6                    if(current_time.minute > 60)current_time.minute = 0;
+ 620   6                    oled_inverse(95,0,107,7);
+ 621   6                    break;
+ 622   6                  case 6:
+ 623   6                    current_time.second += change;
+ 624   6                    if(current_time.second > 60) current_time.second = 0;
+ 625   6                    oled_inverse(115, 0, 127, 7);
+ 626   6                    break;
+ 627   6                }
+ 628   5                time_to_str(&oled_tmpstr, &current_time);
+ 629   5                oled_stop_refresh();
+ 630   5                oled_sprite_change_6x8(0,0,0,oled_tmpstr);
+ 631   5                oled_start_refresh();
+ 632   5              }
+ 633   4            }
+ 634   3          }
+ 635   2        }
+ 636   1      }
+ 637          
+ 638          
+ 639          void alert_countdown()
+ 640          {
+ 641   1        uint8_t second_last = 99;
+ 642   1        uint8_t i = 0;
+ 643   1        terminal_add_bottom("倒计时");
+ 644   1        terminal_add_bottom("现在时间");
+ 645   1        rtc_read_time(&current_time);
+ 646   1        time_to_str(oled_tmpstr, &current_time);
+ 647   1        terminal_add_bottom(oled_tmpstr);
+ 648   1        keyDown.pressed = keyUp.pressed = 0;
+ 649   1        keep_screen_on = 1;
+ 650   1        terminal_add_bottom("开始！");
+ 651   1        alert();
+ 652   1        while(1)
+ 653   1        {
+ 654   2          if(second_last != bcd_to_dec(int_iic_read_addr(RTC_IIC_ADDRESS, 0)))
+ 655   2          {
+ 656   3            second_last = bcd_to_dec(int_iic_read_addr(RTC_IIC_ADDRESS, 0));
+ 657   3            sprintf(oled_tmpstr, "还有%bu秒", (60-second_last));
+ 658   3            terminal_modify(0, oled_tmpstr);
+ 659   3            if(60 - second_last == 6)break;
+ 660   3          }
+ 661   2          if(keyUp.pressed == 1)
+ 662   2          {
+ 663   3            keyDown.pressed = keyUp.pressed = 0;
+ 664   3            terminal_modify(0, "中断");
+ 665   3            keep_screen_on = 0;
+ 666   3            return ;
+ 667   3          }
+ 668   2          delay10ms(2);
+ 669   2        }
+ 670   1        oled_clear_sprites();
+ 671   1        beep(800);
+C51 COMPILER V9.56.0.0   RTC                                                               01/26/2021 18:03:18 PAGE 12  
+
+ 672   1        while(1)
+ 673   1        {
+ 674   2          if(second_last != bcd_to_dec(int_iic_read_addr(RTC_IIC_ADDRESS, 0)))
+ 675   2          {
+ 676   3            second_last = bcd_to_dec(int_iic_read_addr(RTC_IIC_ADDRESS, 0));
+ 677   3            if(second_last == 0)break;
+ 678   3            oled_remove_sprite(i);
+ 679   3            i = (i + 1) & 1;
+ 680   3            oled_sprite_change_pic(i, 47, 0, 32, 64, oled_font_64x32 + ((60 - (uint16_t)(second_last)))*256);
+ 681   3            beep(800);
+ 682   3          }
+ 683   2          if(keyUp.pressed == 1)
+ 684   2          {
+ 685   3            keyDown.pressed = keyUp.pressed = 0;
+ 686   3            terminal_modify(0, "中断");
+ 687   3            keep_screen_on = 0;
+ 688   3            return ;
+ 689   3          }
+ 690   2          delay10ms(2);
+ 691   2        }
+ 692   1        beep(1600);
+ 693   1        keep_screen_on = 0;
+ 694   1        oled_clear_sprites();
+ 695   1        delay10ms(25);
+ 696   1        return;
+ 697   1      }
+ 698          
+ 699          uint8_t command_set_deadline(COMMAND_ARGS)
+ 700          {
+ 701   1        if(argc != 3)return COMMAND_ARG_ERROR;
+ 702   1        
+ 703   1        settings.stop_year = getint(argv[1]);
+ 704   1        settings.stop_month = getint(argv[2]);
+ 705   1        settings.stop_date = getint(argv[3]);
+ 706   1        settings_save();
+ 707   1        terminal_add_bottom("已修改倒计时");
+ 708   1        return COMMAND_OK;
+ 709   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3627    ----
+   CONSTANT SIZE    =   1058    ----
+   XDATA SIZE       =     28      45
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

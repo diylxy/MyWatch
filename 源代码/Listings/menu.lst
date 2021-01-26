@@ -1,0 +1,291 @@
+C51 COMPILER V9.56.0.0   MENU                                                              01/26/2021 18:03:21 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MENU
+OBJECT MODULE PLACED IN .\Objects\menu.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE menu.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listing
+                    -s\menu.lst) TABS(2) OBJECT(.\Objects\menu.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          uint8_t node_buffer[512];
+   4          
+   5          uint16_t node_total;
+   6          uint16_t node_top;
+   7          uint16_t node_selected;
+   8          uint8_t *node_top_ptr;
+   9          
+  10          uint8_t *get_ptr(uint8_t num)
+  11          {
+  12   1        uint16_t i;
+  13   1        if(num == 0)
+  14   1        {
+  15   2          return node_buffer;
+  16   2        }
+  17   1        for(i = 0; i < 512; ++i)
+  18   1        {
+  19   2          if(node_buffer[i] == 0)
+  20   2          {
+  21   3            num--;
+  22   3            if(num == 0)
+  23   3            {
+  24   4              return node_buffer+i+1;
+  25   4            }
+  26   3          }
+  27   2        }
+  28   1        return node_buffer;
+  29   1      }
+  30          
+  31          void menu_init()
+  32          {
+  33   1        node_total = 1;
+  34   1        memcpy(node_buffer, "[返回]", 7);
+  35   1        node_top_ptr = node_buffer+7;
+  36   1        node_top = 0;
+  37   1        node_selected = 0;
+  38   1      }
+  39          
+  40          uint16_t menu_start(uint8_t *title)
+  41          {
+  42   1        uint8_t i;
+  43   1        terminal_set_lines(6);
+  44   1        terminal_init();
+  45   1        terminal_set_big_font(1);
+  46   1        if(title != NULL)
+  47   1        {
+  48   2          oled_sprite_change_str_gb2312(0, title);
+  49   2          i = oled_sprite_get_width(0);
+  50   2          oled_sprite_move(0, (127-i)/2, 24);
+  51   2          oled_inverse((127-i)/2,24,(127-i)/2 + i-1, 24+16);
+  52   2          oled_enable_inverse(1);
+  53   2          delay10ms(50);
+  54   2        }
+C51 COMPILER V9.56.0.0   MENU                                                              01/26/2021 18:03:21 PAGE 2   
+
+  55   1        for(i=4; i>0; --i)
+  56   1        {
+  57   2          if(i > node_total)
+  58   2          {
+  59   3            terminal_add_top("");
+  60   3            continue;
+  61   3          }
+  62   2          terminal_add_top(get_ptr(i-1));
+  63   2        }
+  64   1        while((KEY_UP == 0) || (KEY_DOWN==0));
+  65   1        delay10ms(2);
+  66   1        keyClear();
+  67   1        menu_inverse_refresh();
+  68   1        while(1)
+  69   1        {
+  70   2          if(keyUp.pressing)
+  71   2          {
+  72   3            keyUp.pressed = 0;
+  73   3            keyUp.ignore = 1;
+  74   3            if(node_selected == 0)
+  75   3            {
+  76   4              while(node_selected != node_total-1)
+  77   4              {
+  78   5                menu_roll(1);
+  79   5                delay10ms(5);
+  80   5              }
+  81   4            }
+  82   3            else
+  83   3            {
+  84   4              menu_roll(0);
+  85   4              delay10ms(15);
+  86   4            }
+  87   3          }
+  88   2          if(keyDown.pressing)
+  89   2          {
+  90   3            keyDown.pressed = 0;
+  91   3            keyDown.ignore = 1;
+  92   3            if(node_selected == node_total-1)
+  93   3            {
+  94   4              while(node_selected != 0)
+  95   4              {
+  96   5                menu_roll(0);
+  97   5                delay10ms(5);
+  98   5              }
+  99   4            }
+ 100   3            else
+ 101   3            {
+ 102   4              menu_roll(1);
+ 103   4              delay10ms(15);
+ 104   4            }
+ 105   3          }
+ 106   2          if(keyOK.pressed)
+ 107   2          {
+ 108   3            keyOK.pressed = 0;
+ 109   3            menu_end();
+ 110   3            return node_selected;
+ 111   3          }
+ 112   2          if(keyOK.longpressed)
+ 113   2          {
+ 114   3            keyOK.longpressed = 0;
+ 115   3            menu_end();
+ 116   3            return 0;
+C51 COMPILER V9.56.0.0   MENU                                                              01/26/2021 18:03:21 PAGE 3   
+
+ 117   3          }
+ 118   2        }
+ 119   1      }
+ 120          void menu_add(uint8_t *str)
+ 121          {
+ 122   1        if(node_top_ptr - node_buffer == 512)return;
+ 123   1        while(*str)
+ 124   1        {
+ 125   2          *(node_top_ptr++)=*str++;
+ 126   2          if(node_top_ptr - node_buffer == 512)
+ 127   2          {
+ 128   3            *node_top_ptr = 0;
+ 129   3            return;
+ 130   3          }
+ 131   2        }
+ 132   1        *(node_top_ptr++)=*str;
+ 133   1        node_total++;
+ 134   1      }
+ 135          
+ 136          void menu_roll(bit direction)
+ 137          {
+ 138   1        if(direction)
+ 139   1        {
+ 140   2          
+ 141   2          if(node_selected == node_total-1)
+ 142   2          {
+ 143   3            return;                                       //已经到最底端
+ 144   3          }
+ 145   2          node_selected++;
+ 146   2          if(node_selected - node_top == 4)
+ 147   2          {
+ 148   3            //向下，且超出显示范围
+ 149   3            node_top++;
+ 150   3            terminal_add_bottom(get_ptr(node_top+3));
+ 151   3          }
+ 152   2          else
+ 153   2          {
+ 154   3            menu_inverse_refresh();
+ 155   3          }
+ 156   2        }
+ 157   1        else
+ 158   1        {
+ 159   2          if(node_selected == 0)return;
+ 160   2          node_selected--;
+ 161   2          if((node_selected - node_top) == -1)
+ 162   2          {
+ 163   3            node_top--;
+ 164   3            terminal_add_top(get_ptr(node_top));
+ 165   3          }
+ 166   2          else
+ 167   2          {
+ 168   3            menu_inverse_refresh();
+ 169   3          }
+ 170   2        }
+ 171   1      }
+ 172          
+ 173          void menu_end()
+ 174          {
+ 175   1        terminal_set_big_font(0);
+ 176   1        oled_clear_sprites();
+ 177   1        oled_enable_inverse(0);
+ 178   1        terminal_set_lines(8);
+C51 COMPILER V9.56.0.0   MENU                                                              01/26/2021 18:03:21 PAGE 4   
+
+ 179   1      }
+ 180          
+ 181          void menu_inverse_refresh()
+ 182          {
+ 183   1        uint8_t y_start = node_selected - node_top;
+ 184   1      
+ 185   1        y_start *= 16;
+ 186   1        y_start -= 1;
+ 187   1        oled_inverse(0, y_start, 127, y_start+16);
+ 188   1        oled_enable_inverse(1);
+ 189   1      }
+ 190          
+ 191          
+ 192          
+ 193          ///////////////////////////////////////////////////////////
+ 194          ////////////////////////标准对话框//////////////////////////
+ 195          ///////////////////////////////////////////////////////////
+ 196          
+ 197          uint8_t menu_ask_yn(uint8_t *tip)
+ 198          {
+ 199   1        menu_init();
+ 200   1        menu_add("否");
+ 201   1        menu_add("是");
+ 202   1        return menu_start(tip)-1;
+ 203   1      }
+ 204          
+ 205          uint8_t menu_ask_num(uint8_t start, uint8_t end, uint8_t *tip)
+ 206          {
+ 207   1        uint8_t str[5] = {0};
+ 208   1        uint8_t i;
+ 209   1        menu_init();
+ 210   1        for(i=start; i<end; ++i)
+ 211   1        {
+ 212   2          sprintf(str, "%bu", i);
+ 213   2          menu_add(str);
+ 214   2        }
+ 215   1        i=menu_start(tip);
+ 216   1        if(i==0)return 0xff;
+ 217   1        return i-1+start;
+ 218   1      }
+ 219          
+ 220          void pop_msg(uint8_t *tip)
+ 221          {
+ 222   1        int8_t i;
+ 223   1        i=oled_sprite_find();
+ 224   1        if(i == -1)return;
+ 225   1        oled_sprite_change_gb2312(i,0,0, tip);
+ 226   1        oled_sprite_move(i, (127-oled_sprite_get_width(0))/2, 24);
+ 227   1        beep(SOUND_TIP_FREQ);
+ 228   1        delay10ms(80);
+ 229   1        oled_sprite_move(i, 0, 65);
+ 230   1        delay10ms(30);
+ 231   1        oled_remove_sprite(i);
+ 232   1      }
+ 233          
+ 234          void req_password()
+ 235          {
+ 236   1        morse_mode = 1;
+ 237   1        resetprotect = 1;
+ 238   1        oled_sprite_change_gb2312(0,0,0, "请输入密码");
+ 239   1        oled_sprite_move(0, (127-oled_sprite_get_width(0))/2, 24);
+ 240   1        oled_enable_inverse(1);
+C51 COMPILER V9.56.0.0   MENU                                                              01/26/2021 18:03:21 PAGE 5   
+
+ 241   1        while(1)
+ 242   1        { 
+ 243   2          morse_mode = 1;
+ 244   2          oled_inverse(20+2,40,108-2,42);
+ 245   2          delay10ms(100);
+ 246   2          oled_inverse(20,42,108,44);
+ 247   2          if(morse_finished == 1)
+ 248   2          {
+ 249   3            morse_finished = 0;
+ 250   3            if(strcmp(morse_input_str, MENU_PASSWORD) == 0)
+ 251   3              break;
+ 252   3          }
+ 253   2          delay10ms(100);
+ 254   2        }
+ 255   1        oled_inverse(20+20,0,108-20,0);
+ 256   1        morse_mode = 0;
+ 257   1        resetprotect=0;
+ 258   1        delay10ms(50);
+ 259   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1280    ----
+   CONSTANT SIZE    =     38    ----
+   XDATA SIZE       =    521      26
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

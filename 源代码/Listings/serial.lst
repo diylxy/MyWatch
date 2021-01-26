@@ -1,0 +1,205 @@
+C51 COMPILER V9.56.0.0   SERIAL                                                            01/26/2021 18:03:21 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE SERIAL
+OBJECT MODULE PLACED IN .\Objects\serial.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE serial.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listi
+                    -ngs\serial.lst) TABS(2) OBJECT(.\Objects\serial.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          uint16_t timeout = 0;
+   4          bit en = 1;
+   5          volatile bit busy = 0;
+   6          volatile bit ri2 = 0;
+   7          volatile uint8_t tmps2buf;
+   8          void serial_init()    //9600bps@24.000MHz
+   9          {
+  10   1        //串口1
+  11   1        SCON = 0x50;    //8位数据,可变波特率
+  12   1        AUXR |= 0x01;   //串口1选择定时器2为波特率发生器
+  13   1        AUXR |= 0x04;   //定时器2时钟为Fosc,即1T
+  14   1        T2L = 0x8F;   //设定定时初值
+  15   1        T2H = 0xFD;   //设定定时初值
+  16   1        AUXR |= 0x10;   //启动定时器2
+  17   1        PS = 1;
+  18   1        IP2 = 1;
+  19   1        PT0 =1 ;// PT1= 1;
+  20   1        //串口2
+  21   1        S2CON = 0x50;
+  22   1        P1M0 |= 0x02;
+  23   1        P3M0 |= 0x02;
+  24   1        P1M1 = P3M1 = 0;
+  25   1        P10 = P30 = P11 = P31 = 1;IE2 = 0x01;
+  26   1      }
+  27          void serial_set_timeout(uint16_t _timeout)
+  28          {
+  29   1        timeout = _timeout;
+  30   1      }
+  31          void serial1_sendstr(uint8_t *str)
+  32          {
+  33   1        TI = 0;
+  34   1        while(*str)
+  35   1        {
+  36   2          SBUF = *str;
+  37   2          while(TI == 0);
+  38   2          TI = 0;
+  39   2          ++str;
+  40   2        }
+  41   1      }
+  42          void serial2_send(char dat)
+  43          {
+  44   1        if(en == 1)return;
+  45   1        while (busy);
+  46   1        busy = 1;
+  47   1        S2BUF = dat;
+  48   1      }
+  49          char serial2_read()
+  50          {
+  51   1        uint32_t start = millis;
+  52   1      //  ri2 = 0;
+  53   1        while(ri2 == 0)
+  54   1        {
+C51 COMPILER V9.56.0.0   SERIAL                                                            01/26/2021 18:03:21 PAGE 2   
+
+  55   2          if((millis - start > timeout) && (timeout != 0))return 1;
+  56   2        }
+  57   1        ri2 = 0;
+  58   1        return tmps2buf;
+  59   1      }
+  60          void serial2_sendstr(uint8_t *str)
+  61          {
+  62   1        S2CON &= ~0x02;
+  63   1        while(*str)
+  64   1        {
+  65   2          serial2_send(*str);
+  66   2          ++str;
+  67   2        }
+  68   1      }
+  69          bit serial1_getdata(uint8_t *buffer, uint16_t size)
+  70          {
+  71   1        uint32_t start = millis;
+  72   1        uint16_t i = 0;
+  73   1        RI = 0;
+  74   1        while(size)
+  75   1        {
+  76   2          while(RI == 0)
+  77   2          {
+  78   3            if((millis - start > timeout) && timeout != 0)return 1;
+  79   3          }
+  80   2          RI = 0;
+  81   2          *(buffer + i) = serial2_read();
+  82   2          ++i;
+  83   2          --size;
+  84   2        }
+  85   1        return 0;
+  86   1      }
+  87          bit serial2_getdata(uint8_t *buffer, uint16_t size)
+  88          {
+  89   1        uint32_t start = millis;
+  90   1        uint16_t i = 0;
+  91   1        S2CON &= ~0x01;
+  92   1        while(size)
+  93   1        {
+  94   2          *(buffer + i) = serial2_read();
+  95   2          ++i;
+  96   2          --size;
+  97   2        }
+  98   1        return 0;
+  99   1      }
+ 100          void rf_set_rfid(uint16_t rfid)
+ 101          {
+ 102   1        JDY_SET = 0;
+ 103   1        delay10ms(5);
+ 104   1        sprintf(oled_tmpstr, "AT+RFID%04x\r\n", rfid);
+ 105   1        serial2_sendstr(oled_tmpstr);
+ 106   1        rf_read();
+ 107   1        delay10ms(5);
+ 108   1        JDY_SET = 1;
+ 109   1      }
+ 110          void rf_set_dvid(uint16_t dvid)
+ 111          {
+ 112   1        JDY_SET = 0;
+ 113   1        delay10ms(5);
+ 114   1        sprintf(oled_tmpstr, "AT+DVID%04x\r\n", dvid);
+ 115   1        serial2_sendstr(oled_tmpstr);
+ 116   1        rf_read();
+C51 COMPILER V9.56.0.0   SERIAL                                                            01/26/2021 18:03:21 PAGE 3   
+
+ 117   1        delay10ms(5);
+ 118   1        JDY_SET = 1;
+ 119   1      }
+ 120          void rf_set_power(uint8_t power)
+ 121          {
+ 122   1        if(power > 9)power = 9;
+ 123   1        JDY_SET = 0;
+ 124   1        delay10ms(5);
+ 125   1        sprintf(oled_tmpstr, "AT+POWE%bd\r\n", power);
+ 126   1        serial2_sendstr(oled_tmpstr);
+ 127   1        rf_read();
+ 128   1        delay10ms(5);
+ 129   1        JDY_SET = 1;
+ 130   1      }
+ 131          
+ 132          void rf_set_channel(int8_t channel)
+ 133          {
+ 134   1        if(channel < 0)return;
+ 135   1        JDY_SET = 0;
+ 136   1        delay10ms(5);
+ 137   1        sprintf(oled_tmpstr, "AT+RFC%03bd\r\n", channel);
+ 138   1        serial2_sendstr(oled_tmpstr);
+ 139   1        rf_read();
+ 140   1        delay10ms(5);
+ 141   1        JDY_SET = 1;
+ 142   1      }
+ 143          
+ 144          
+ 145          void rf_enable(bit enable)
+ 146          {
+ 147   1        /*
+ 148   1        if(enable)
+ 149   1        {
+ 150   1          IE2 |= 0x01;
+ 151   1        }
+ 152   1        else
+ 153   1        {
+ 154   1          IE2 &= 0xfe;
+ 155   1        }*/
+ 156   1        en = JDY_CS = !enable;
+ 157   1        rf_read();
+ 158   1        delay10ms(5);
+ 159   1      }
+ 160          
+ 161          
+ 162          void Uart2Isr() interrupt 8
+ 163          {
+ 164   1          if (S2CON & 0x02)
+ 165   1          {
+ 166   2              S2CON &= ~0x02;
+ 167   2              busy = 0;
+ 168   2          }
+ 169   1          if (S2CON & 0x01)
+ 170   1          {
+ 171   2              S2CON &= ~0x01;
+ 172   2              ri2 = 1;
+ 173   2              tmps2buf = S2BUF;
+ 174   2          }
+ 175   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+C51 COMPILER V9.56.0.0   SERIAL                                                            01/26/2021 18:03:21 PAGE 4   
+
+   CODE SIZE        =    753    ----
+   CONSTANT SIZE    =     55    ----
+   XDATA SIZE       =      3      32
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      3       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

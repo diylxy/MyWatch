@@ -1,0 +1,18 @@
+".\Objects\STARTUP.obj",
+".\Objects\flash.obj",
+".\Objects\main.obj",
+".\Objects\oled.obj",
+".\Objects\rtc.obj",
+".\Objects\internal_iic.obj",
+".\Objects\adc.obj",
+".\Objects\Terminal.obj",
+".\Objects\morse.obj",
+".\Objects\alarm.obj",
+".\Objects\settings.obj",
+".\Objects\music.obj",
+".\Objects\menu.obj",
+".\Objects\serial.obj" 
+TO ".\Objects\watch" 
+PRINT(".\Listings\watch.m51") RAMSIZE(256) 
+CODE( 0X0000-0XFFF8 )
+XDATA( 0X0000-0X1FFF )

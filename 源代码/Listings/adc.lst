@@ -1,0 +1,105 @@
+C51 COMPILER V9.56.0.0   ADC                                                               01/26/2021 18:03:19 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE ADC
+OBJECT MODULE PLACED IN .\Objects\adc.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE adc.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings
+                    -\adc.lst) TABS(2) OBJECT(.\Objects\adc.obj)
+
+line level    source
+
+   1          
+   2          #include "config.h"
+   3          uint8_t code battIconEmpty[] ={
+   4            0xFF,0x81,0xBD,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0xFF,0x3C,
+   5          };
+   6          
+   7          uint8_t code battIconLow[] ={
+   8            0xFF,0x81,0xBD,0xBD,0xBD,0xBD,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0x81,0xFF,0x3C,
+   9          };
+  10          
+  11          uint8_t code battIconHigh[] ={
+  12            0xFF,0x81,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0x81,0x81,0x81,0x81,0xFF,0x3C,
+  13          };
+  14          
+  15          uint8_t code battIconFull[] ={
+  16            0xFF,0x81,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0xBD,0x81,0xFF,0x3C,
+  17          };
+  18          
+  19          uint8_t code chargeIcon[] = {
+  20            0x00, 0x10, 0x18, 0x9C, 0x72, 0x30, 0x10, 0x00
+  21          };
+  22          uint16_t code Vbg_ROM _at_ 0xfdf7;              //60K程序空间的MCU
+  23          
+  24          #define ADC_POWER   0x80                    //ADC电源控制位
+  25          
+  26          uint16_t GetADC(uint8_t ch)
+  27          {     
+  28   1        uint16_t result;
+  29   1        ADC_CONTR = ADC_POWER | ch | ADC_START;
+  30   1        _nop_();                                //等待4个NOP
+  31   1        _nop_();
+  32   1        _nop_();
+  33   1        _nop_();
+  34   1        while (!(ADC_CONTR & ADC_FLAG));        //等待ADC转换完成
+  35   1        ADC_CONTR &= ~ADC_FLAG;                 //清除ADC标志
+  36   1        result = ADC_RES;
+  37   1        result <<= 8;
+  38   1        result |= ADC_RESL;
+  39   1        return result;
+  40   1      }
+  41          
+  42          uint16_t adc_get_voltage(uint8_t channel)
+  43          {
+  44   1         uint32_t average = 0;
+  45   1         uint8_t i;
+  46   1         ADC_RES = 0;
+  47   1         GetADC(channel);
+  48   1         GetADC(channel);
+  49   1        for(i = 0; i < 8; ++i)
+  50   1        {
+  51   2         average += GetADC(channel);
+  52   2        }
+  53   1        average = average >> 3;
+  54   1      
+C51 COMPILER V9.56.0.0   ADC                                                               01/26/2021 18:03:19 PAGE 2   
+
+  55   1        average = average *6600/4096;
+  56   1        return average;
+  57   1      }
+  58          
+  59          void ADCUpdate()
+  60          {
+  61   1        uint16_t battery_voltage = adc_get_voltage(BAT_ADC);
+  62   1        if(CHARGE == 1)
+  63   1        {
+  64   2          if(battery_voltage > 3900)
+  65   2            oled_draw_bitmap_fast(0, 55, battIconFull,16, 8, 0, 0);
+  66   2          else if(battery_voltage > 3700)
+  67   2            oled_draw_bitmap_fast(0, 55, battIconHigh, 16, 8, 0, 0);
+  68   2          else if(battery_voltage > 3500)
+  69   2            oled_draw_bitmap_fast(0, 55, battIconHigh, 16, 8, 0, 0);
+  70   2          else if(battery_voltage > 3400)
+  71   2            oled_draw_bitmap_fast(0, 55, battIconLow, 16, 8, 0, 0);
+  72   2          else                           
+  73   2            oled_draw_bitmap_fast(0, 55, battIconEmpty, 16, 8, 0, 0);
+  74   2        }
+  75   1        else
+  76   1        {
+  77   2          oled_draw_bitmap_fast(6, 55 ,chargeIcon, 8, 8, 0, 0);
+  78   2        }
+  79   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    336    ----
+   CONSTANT SIZE    =     72    ----
+   XDATA SIZE       =   ----       8
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

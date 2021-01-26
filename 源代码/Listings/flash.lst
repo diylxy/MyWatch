@@ -1,0 +1,289 @@
+C51 COMPILER V9.56.0.0   FLASH                                                             01/26/2021 18:03:17 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE FLASH
+OBJECT MODULE PLACED IN .\Objects\flash.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE flash.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listin
+                    -gs\flash.lst) TABS(2) OBJECT(.\Objects\flash.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          //sfr SPSTAT          =   0xcd;                   //SPI状态寄存器
+   4          #define SPIF            0x80                    //SPSTAT.7
+   5          #define WCOL            0x40                    //SPSTAT.6
+   6          //sfr SPCTL           =   0xce;                   //SPI控制寄存器
+   7          #define FLASH_CSIG            0x80                    //SPCTL.7
+   8          #define SPEN            0x40                    //SPCTL.6
+   9          #define DORD            0x20                    //SPCTL.5
+  10          #define MSTR            0x10                    //SPCTL.4
+  11          #define CPOL            0x08                    //SPCTL.3
+  12          #define CPHA            0x04                    //SPCTL.2
+  13          #define SPDHH           0x00                    //CPU_CLK/4
+  14          #define SPDH            0x01                    //CPU_CLK/16
+  15          #define SPDL            0x02                    //CPU_CLK/64
+  16          #define SPDLL           0x03                    //CPU_CLK/128
+  17          //sfr SPDAT           =   0xcf;                   //SPI数据寄存器
+  18          
+  19          //FLASH_CS
+  20          //串行Flash命令集
+  21          #define SFC_WREN        0x06                  
+  22          #define SFC_WRDI        0x04
+  23          #define SFC_RDSR        0x05
+  24          #define SFC_WRSR        0x01
+  25          #define SFC_READ        0x03
+  26          #define SFC_FASTREAD    0x0B
+  27          #define SFC_RDID        0xAB
+  28          #define SFC_PAGEPROG    0x02
+  29          #define SFC_SECTORERASE 0x20
+  30          #define SFC_RDCR        0xA1
+  31          #define SFC_WRCR        0xF1
+  32          #define SFC_SECTORER    0xD7
+  33          #define SFC_BLOCKER     0xD8
+  34          #define SFC_CHIPER      0xC7
+  35          
+  36          
+  37          bit g_fFlashOK;                                //Flash状态
+  38          
+  39          bit flash_chk_id();
+  40          void flash_init()
+  41          {
+  42   1        SPSTAT = SPIF | WCOL;                       //清除SPI状态
+  43   1        FLASH_CS = 1;
+  44   1        SPCTL = FLASH_CSIG | SPEN | MSTR;                 //设置SPI为主模式
+  45   1        flash_chk_id();
+  46   1      }
+  47          
+  48          uint8_t SpiShift(uint8_t dat)
+  49          {
+  50   1          SPDAT = dat;                                //触发SPI发送
+  51   1          while (!(SPSTAT & SPIF));                   //等待SPI数据传输完成
+  52   1          SPSTAT = SPIF | WCOL;                       //清除SPI状态
+  53   1          
+  54   1          return SPDAT;
+C51 COMPILER V9.56.0.0   FLASH                                                             01/26/2021 18:03:17 PAGE 2   
+
+  55   1      }
+  56          
+  57          /************************************************
+  58          检测Flash是否准备就绪
+  59          入口参数: 无
+  60          出口参数:
+  61              0 : 没有检测到正确的Flash
+  62              1 : Flash准备就绪
+  63          ************************************************/
+  64          bit flash_chk_id()
+  65          {
+  66   1          uint8_t dat1;
+  67   1          
+  68   1          FLASH_CS = 0;
+  69   1          SpiShift(SFC_RDID);                         //发送读取ID命令
+  70   1          SpiShift(0x00);                             //空读3个字节
+  71   1          SpiShift(0x00);
+  72   1          SpiShift(0x00);
+  73   1          dat1 = SpiShift(0x00);                      //读取制造商ID1
+  74   1          FLASH_CS = 1;
+  75   1                                                      //检测是否为PM25LVxx系列的Flash
+  76   1          g_fFlashOK = ((dat1 == 0x17));
+  77   1          return g_fFlashOK;
+  78   1      }
+  79          
+  80          /************************************************
+  81          检测Flash的忙状态
+  82          入口参数: 无
+  83          出口参数:
+  84              0 : Flash处于空闲状态
+  85              1 : Flash处于忙状态
+  86          ************************************************/
+  87          bit flash_chk_busy()
+  88          {
+  89   1          uint8_t dat;
+  90   1          
+  91   1          FLASH_CS = 0;
+  92   1          SpiShift(SFC_RDSR);                         //发送读取状态命令
+  93   1          dat = SpiShift(0);                          //读取状态
+  94   1          FLASH_CS = 1;
+  95   1          
+  96   1          return (dat & 0x01);                        //状态值的Bit0即为忙标志
+  97   1      }
+  98          
+  99          /************************************************
+ 100          使能Flash写命令
+ 101          入口参数: 无
+ 102          出口参数: 无
+ 103          ************************************************/
+ 104          void FlashWriteEnable()
+ 105          {
+ 106   1          while (flash_chk_busy());                      //Flash忙检测
+ 107   1          FLASH_CS = 0;
+ 108   1          SpiShift(SFC_WREN);                         //发送写使能命令
+ 109   1          FLASH_CS = 1;
+ 110   1      }
+ 111          
+ 112          /************************************************
+ 113          擦除整片Flash
+ 114          入口参数: 无
+ 115          出口参数: 无
+ 116          ************************************************/
+C51 COMPILER V9.56.0.0   FLASH                                                             01/26/2021 18:03:17 PAGE 3   
+
+ 117          void flash_chip_erase()
+ 118          {
+ 119   1          if (g_fFlashOK)
+ 120   1          {
+ 121   2              FlashWriteEnable();                     //使能Flash写命令
+ 122   2              FLASH_CS = 0;
+ 123   2              SpiShift(SFC_CHIPER);                   //发送片擦除命令
+ 124   2              FLASH_CS = 1;
+ 125   2          }
+ 126   1      }
+ 127          
+ 128          /************************************************
+ 129          从Flash中读取数据
+ 130          入口参数:
+ 131              addr   : 地址参数
+ 132              size   : 数据块大小
+ 133              buffer : 缓冲从Flash中读取的数据
+ 134          出口参数:
+ 135              无
+ 136          ************************************************/
+ 137          void flash_read(uint32_t addr, uint32_t size, uint8_t *buffer)
+ 138          {
+ 139   1          if (g_fFlashOK)
+ 140   1          {
+ 141   2              while (flash_chk_busy());                  //Flash忙检测
+ 142   2              FLASH_CS = 0;
+ 143   2              SpiShift(SFC_FASTREAD);                 //使用快速读取命令
+ 144   2              SpiShift(((uint8_t *)&addr)[1]);           //设置起始地址
+ 145   2              SpiShift(((uint8_t *)&addr)[2]);
+ 146   2              SpiShift(((uint8_t *)&addr)[3]);
+ 147   2              SpiShift(0);                            //需要空读一个字节
+ 148   2              while (size)
+ 149   2              {
+ 150   3                  *buffer = SpiShift(0);              //自动连续读取并保存
+ 151   3                  addr++;
+ 152   3                  buffer++;
+ 153   3                  size--;
+ 154   3              }
+ 155   2              FLASH_CS = 1;
+ 156   2          }
+ 157   1      }
+ 158          
+ 159          /************************************************
+ 160          写数据到Flash中
+ 161          入口参数:
+ 162              addr   : 地址参数
+ 163              size   : 数据块大小
+ 164              buffer : 缓冲需要写入Flash的数据
+ 165          出口参数: 无
+ 166          ************************************************/
+ 167          void flash_write(uint32_t addr, uint32_t size, uint8_t *buffer)
+ 168          {
+ 169   1          if (g_fFlashOK)
+ 170   1          while (size)
+ 171   1          {
+ 172   2              FlashWriteEnable();                     //使能Flash写命令
+ 173   2              FLASH_CS = 0;
+ 174   2              SpiShift(SFC_PAGEPROG);                 //发送页编程命令
+ 175   2              SpiShift(((uint8_t *)&addr)[1]);           //设置起始地址
+ 176   2              SpiShift(((uint8_t *)&addr)[2]);
+ 177   2              SpiShift(((uint8_t *)&addr)[3]);
+ 178   2              while (size)
+C51 COMPILER V9.56.0.0   FLASH                                                             01/26/2021 18:03:17 PAGE 4   
+
+ 179   2              {
+ 180   3                  SpiShift(*buffer);                  //连续页内写
+ 181   3                  addr++;
+ 182   3                  buffer++;
+ 183   3                  size--;
+ 184   3                  if ((addr & 0xff) == 0) break;
+ 185   3              }
+ 186   2              FLASH_CS = 1;
+ 187   2          }
+ 188   1      }
+ 189          /************************************************
+ 190          Flash 扇区擦除
+ 191          入口参数:
+ 192              addr   : 地址参数
+ 193          出口参数: 无
+ 194          ************************************************/
+ 195          void flash_erase_sector(uint32_t addr)
+ 196          {
+ 197   1          if (g_fFlashOK)
+ 198   1          {
+ 199   2            FlashWriteEnable();                     //使能Flash写命令
+ 200   2            FLASH_CS = 0;
+ 201   2            SpiShift(SFC_SECTORERASE);                 //发送页编程命令
+ 202   2            SpiShift(((uint8_t *)&addr)[1]);           //设置起始地址
+ 203   2            SpiShift(((uint8_t *)&addr)[2]);
+ 204   2            SpiShift(((uint8_t *)&addr)[3]);
+ 205   2            FLASH_CS = 1;
+ 206   2          }
+ 207   1      }
+ 208          
+ 209          uint8_t command_flash_program(COMMAND_ARGS)
+ 210          {
+ 211   1        uint8_t dat[256];
+ 212   1        uint8_t bufferpointer = 0;
+ 213   1        uint32_t addr = 0;
+ 214   1        ES = 0;
+ 215   1        keep_screen_on = 1;
+ 216   1        terminal_add_bottom("Flash Programmer");
+ 217   1        terminal_add_bottom("");
+ 218   1        terminal_add_bottom("");
+ 219   1        //terminal_require_password();
+ 220   1        terminal_add_bottom("Erasing Flash...");
+ 221   1        flash_chip_erase();
+ 222   1        
+ 223   1        while (flash_chk_busy())delay10ms(10);
+ 224   1        terminal_add_bottom("Started");
+ 225   1        delay10ms(100);
+ 226   1        oled_stop_refresh();
+ 227   1        while(KEY_UP == 0);
+ 228   1        RI = TI = 0;
+ 229   1        while(KEY_UP)
+ 230   1        {
+ 231   2          if(RI)
+ 232   2          {
+ 233   3            RI = 0;
+ 234   3            dat[bufferpointer] = SBUF;
+ 235   3            ++bufferpointer;
+ 236   3            if(bufferpointer == 0)
+ 237   3            {
+ 238   4              flash_write(addr, 256, dat);
+ 239   4              addr += 256;
+ 240   4              SBUF = 0x01;
+C51 COMPILER V9.56.0.0   FLASH                                                             01/26/2021 18:03:17 PAGE 5   
+
+ 241   4              _nop_();
+ 242   4              _nop_();
+ 243   4              while(TI == 0);
+ 244   4              TI = 0;
+ 245   4            }
+ 246   3          }
+ 247   2        }
+ 248   1        keep_screen_on = 0;
+ 249   1        RI = TI = 0;
+ 250   1        ES = 1;
+ 251   1        terminal_add_bottom("Abort");
+ 252   1        sprintf(oled_tmpstr, "%lu", addr);
+ 253   1        terminal_add_bottom(oled_tmpstr);
+ 254   1        return COMMAND_OK;
+ 255   1      }
+*** WARNING C280 IN LINE 209 OF flash.c: 'argc': unreferenced local variable
+*** WARNING C280 IN LINE 209 OF flash.c: 'argv': unreferenced local variable
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    696    ----
+   CONSTANT SIZE    =     53    ----
+   XDATA SIZE       =   ----     291
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

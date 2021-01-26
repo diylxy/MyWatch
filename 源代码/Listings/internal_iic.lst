@@ -1,0 +1,270 @@
+C51 COMPILER V9.56.0.0   INTERNAL_IIC                                                      01/26/2021 18:03:18 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE INTERNAL_IIC
+OBJECT MODULE PLACED IN .\Objects\internal_iic.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE internal_iic.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.
+                    -\Listings\internal_iic.lst) TABS(2) OBJECT(.\Objects\internal_iic.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          #define INTERNAL_IIC_DELAY() Delay5us()
+   3          
+   4          void Delay5us()   //@11.0592MHz
+   5          {
+   6   1        unsigned char i;
+   7   1        _nop_();
+   8   1        i = 64;
+   9   1        while (--i);
+  10   1      }
+  11          
+  12          void int_iic_start()        /* --------- Initiate int_iic_start condition ---------- */   
+  13          {   
+  14   1        INT_SDA = 1; INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();
+  15   1        INT_SCL = 1; INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();  
+  16   1        INT_SDA = 0; INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();   
+  17   1      }   
+  18          
+  19          void int_iic_stop()     /* ---------- Initiate int_iic_stop condition ----------- */   
+  20          {   
+  21   1        INT_SDA = 0;   INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();
+  22   1        INT_SCL = 1;INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();
+  23   1        INT_SDA = 1;  INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY(); 
+  24   1      }   
+  25             
+  26          
+  27          uint8_t int_iic_write(uint8_t d)     /* ----------------------------- */   
+  28          {   
+  29   1          uint8_t i;   
+  30   1          bit ack;
+  31   1          INT_SCL = 0; INTERNAL_IIC_DELAY();  
+  32   1          for (i = 0;i < 8; i++)   
+  33   1          {   INTERNAL_IIC_DELAY();
+  34   2              if (d & 0x80)   
+  35   2                  INT_SDA = 1; /* Send the msbits first */   
+  36   2              else   
+  37   2                  INT_SDA = 0;   
+  38   2              INTERNAL_IIC_DELAY();
+  39   2              INT_SCL = 0;   INTERNAL_IIC_DELAY();
+  40   2              INT_SCL = 1;   INTERNAL_IIC_DELAY();
+  41   2              d = d << 1;  INTERNAL_IIC_DELAY(); /* do shift here to increase INT_SCL high time */   
+  42   2              INT_SCL = 0;   INTERNAL_IIC_DELAY();
+  43   2          }   
+  44   1        INT_SDA = 1;
+  45   1        INT_SCL = 1;
+  46   1        i = 255;
+  47   1        while(INT_SDA && --i)
+  48   1        {
+  49   2          ;
+  50   2        }
+  51   1        ack = INT_SDA;  //接收设备的ack _n
+  52   1        INT_SCL = 0;
+  53   1        INT_SDA = 1;
+  54   1        return(ack);   
+C51 COMPILER V9.56.0.0   INTERNAL_IIC                                                      01/26/2021 18:03:18 PAGE 2   
+
+  55   1      }   
+  56             
+  57             
+  58          uint8_t int_iic_read(uint8_t ack)  /* ----------------------------------- */   
+  59          {   
+  60   1          uint8_t i, d;   
+  61   1         
+  62   1          d = 0;   
+  63   1          INT_SDA = 1;INTERNAL_IIC_DELAY();            /* Let go of INT_SDA line */   
+  64   1          INT_SCL = 0;INTERNAL_IIC_DELAY(); 
+  65   1          for (i = 0; i < 8; i++)  /* read the msb first */   
+  66   1          {   
+  67   2              INT_SCL = 1;INTERNAL_IIC_DELAY();   
+  68   2              d = d << 1;  INTERNAL_IIC_DELAY(); 
+  69   2              d = d | (unsigned char)INT_SDA; INTERNAL_IIC_DELAY();  
+  70   2              INT_SCL = 0;   INTERNAL_IIC_DELAY();
+  71   2          }   
+  72   1          INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();INTERNAL_IIC_DELAY();
+  73   1          INT_SDA = ack;INTERNAL_IIC_DELAY();          /* low for ack, high for nack */   
+  74   1          INT_SCL = 1; INTERNAL_IIC_DELAY();  
+  75   1          INT_SCL = 0; INTERNAL_IIC_DELAY();  
+  76   1         
+  77   1          INT_SDA = 1; INTERNAL_IIC_DELAY();         /* Release the INT_SDA line */   
+  78   1          return d;   
+  79   1      }   
+  80          
+  81          uint8_t int_iic_read_addr(uint8_t devaddr, uint8_t addr)
+  82          {
+  83   1        uint8_t result = 0;
+  84   1        int_iic_start();
+  85   1        int_iic_write(devaddr);
+  86   1        int_iic_write(addr);
+  87   1        
+  88   1        int_iic_start();
+  89   1        int_iic_write(devaddr|0x01);
+  90   1        result = int_iic_read(INTERNAL_IIC_NACK);
+  91   1        int_iic_stop();
+  92   1        return result;
+  93   1      }
+  94          
+  95          void int_iic_write_addr(uint8_t devaddr, uint8_t addr, uint8_t dat)
+  96          {
+  97   1        int_iic_start();
+  98   1        int_iic_write(devaddr);
+  99   1        int_iic_write(addr);
+ 100   1        int_iic_write(dat);
+ 101   1        int_iic_stop();
+ 102   1      }
+ 103          
+ 104          uint8_t int_iic_check_device(uint8_t addr)
+ 105          {
+ 106   1        uint8_t result = 0;
+ 107   1        int_iic_start();
+ 108   1        result = int_iic_write(addr);
+ 109   1        int_iic_stop();
+ 110   1        return result;
+ 111   1      }
+ 112          
+ 113          uint8_t command_iic_check(COMMAND_ARGS)
+ 114          {
+ 115   1        uint8_t addr;
+ 116   1        uint8_t tmpstr[12];
+C51 COMPILER V9.56.0.0   INTERNAL_IIC                                                      01/26/2021 18:03:18 PAGE 3   
+
+ 117   1        keyClear();
+ 118   1        terminal_add_bottom("Checking IIC...");
+ 119   1        for(addr = 0; addr < 0x7f; ++addr)
+ 120   1        {
+ 121   2          if(int_iic_check_device(addr << 1) == 0)
+ 122   2          {
+ 123   3            sprintf(tmpstr, "Found:0x%2x", addr);
+ 124   3            tmpstr[11] = 0;
+ 125   3            terminal_add_bottom(tmpstr);
+ 126   3            while(keyUp.pressed == 0);
+ 127   3            keyUp.pressed = 0;
+ 128   3          }
+ 129   2        }
+ 130   1        return COMMAND_OK;
+ 131   1      }
+*** WARNING C280 IN LINE 113 OF internal_iic.c: 'argc': unreferenced local variable
+*** WARNING C280 IN LINE 113 OF internal_iic.c: 'argv': unreferenced local variable
+ 132          uint8_t command_iic_read(COMMAND_ARGS)
+ 133          {
+ 134   1        uint8_t tmpstr[7];
+ 135   1        uint8_t devaddr;
+ 136   1        uint8_t addr;
+ 137   1        uint8_t result;
+ 138   1        
+ 139   1        if(argc != 2)return COMMAND_ARG_ERROR;
+ 140   1      
+ 141   1        devaddr = gethex8(argv[1]); 
+ 142   1        addr = gethex8(argv[2]);  
+ 143   1        
+ 144   1        if(int_iic_check_device(devaddr << 1))
+ 145   1        {
+ 146   2          terminal_add_bottom("No Such Device");
+ 147   2          return COMMAND_ERROR;
+ 148   2        }
+ 149   1        result = int_iic_read_addr(devaddr << 1, addr); 
+ 150   1        
+ 151   1        sprintf(tmpstr, "0x%2x", result);
+ 152   1        tmpstr[4] = 0;
+ 153   1        terminal_add_bottom(tmpstr);
+ 154   1        return COMMAND_OK;
+ 155   1      }
+ 156          uint8_t command_iic_write(COMMAND_ARGS)
+ 157          {
+ 158   1        uint8_t devaddr;
+ 159   1        uint8_t addr;
+ 160   1        uint8_t dat;
+ 161   1        if(argc != 3)return COMMAND_ARG_ERROR;
+ 162   1        devaddr = gethex8(argv[1]);
+ 163   1        addr = gethex8(argv[2]);
+ 164   1        dat = gethex8(argv[3]);
+ 165   1        if(int_iic_check_device(devaddr << 1))
+ 166   1        {
+ 167   2          terminal_add_bottom("No Such Device");
+ 168   2          return COMMAND_ERROR;
+ 169   2        }
+ 170   1        int_iic_write_addr(devaddr << 1, addr, dat);
+ 171   1        terminal_add_bottom("OK");
+ 172   1        return COMMAND_OK;
+ 173   1      }
+ 174          
+ 175          uint8_t command_iic_read16(COMMAND_ARGS)
+ 176          {
+C51 COMPILER V9.56.0.0   INTERNAL_IIC                                                      01/26/2021 18:03:18 PAGE 4   
+
+ 177   1        uint8_t tmpstr[7];
+ 178   1        uint8_t devaddr;
+ 179   1        uint16_t addr;
+ 180   1        uint8_t result;
+ 181   1        
+ 182   1        if(argc != 3)return COMMAND_ARG_ERROR;
+ 183   1      
+ 184   1        devaddr = gethex8(argv[1]); 
+ 185   1        addr = gethex8(argv[2]);  
+ 186   1        addr <<= 8;
+ 187   1        addr += gethex8(argv[3]);
+ 188   1        devaddr <<= 1;
+ 189   1        if(int_iic_check_device(devaddr))
+ 190   1        {
+ 191   2          terminal_add_bottom("No Such Device");
+ 192   2          return COMMAND_ERROR;
+ 193   2        }
+ 194   1        int_iic_start();
+ 195   1        int_iic_write(devaddr);
+ 196   1        int_iic_write(addr >> 8);
+ 197   1        int_iic_write(addr);
+ 198   1        
+ 199   1        int_iic_start();
+ 200   1        int_iic_write(devaddr|0x01);
+ 201   1        result = int_iic_read(INTERNAL_IIC_NACK);
+ 202   1        int_iic_stop();
+ 203   1        
+ 204   1        sprintf(tmpstr, "0x%2x", result);
+ 205   1        tmpstr[4] = 0;
+ 206   1        terminal_add_bottom(tmpstr);
+ 207   1        return COMMAND_OK;
+ 208   1      }
+ 209          
+ 210          uint8_t command_iic_write16(COMMAND_ARGS)
+ 211          {
+ 212   1        uint8_t devaddr;
+ 213   1        uint16_t addr;
+ 214   1        uint8_t dat;
+ 215   1        if(argc != 4)return COMMAND_ARG_ERROR;
+ 216   1        devaddr = gethex8(argv[1]);
+ 217   1        addr = gethex8(argv[2]);
+ 218   1        addr <<= 8;
+ 219   1        addr += gethex8(argv[3]);
+ 220   1        dat = gethex8(argv[4]);
+ 221   1        if(int_iic_check_device(devaddr << 1))
+ 222   1        {
+ 223   2          terminal_add_bottom("No Such Device");
+ 224   2          return COMMAND_ERROR;
+ 225   2        }
+ 226   1        
+ 227   1        int_iic_start();
+ 228   1        int_iic_write(devaddr);
+ 229   1        int_iic_write(addr>>8);
+ 230   1        int_iic_write(addr);
+ 231   1        int_iic_write(dat);
+ 232   1        int_iic_stop();
+ 233   1        
+ 234   1        terminal_add_bottom("OK");
+ 235   1        return COMMAND_OK;
+ 236   1      }
+
+
+C51 COMPILER V9.56.0.0   INTERNAL_IIC                                                      01/26/2021 18:03:18 PAGE 5   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1021    ----
+   CONSTANT SIZE    =     52    ----
+   XDATA SIZE       =   ----      55
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

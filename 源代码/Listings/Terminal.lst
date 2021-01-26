@@ -1,0 +1,331 @@
+C51 COMPILER V9.56.0.0   TERMINAL                                                          01/26/2021 18:03:19 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE TERMINAL
+OBJECT MODULE PLACED IN .\Objects\Terminal.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE Terminal.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Lis
+                    -tings\Terminal.lst) TABS(2) OBJECT(.\Objects\Terminal.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          uint8_t bottomline=0;
+   4          bit bigfont = 0;
+   5          uint8_t TERMINAL_LINES = 8;
+   6          #define COMMAND_COUNT 10
+   7          uint8_t *command_func_name[] = 
+   8          {
+   9            "iiccheck",
+  10            "iicread",
+  11            "iicwrite",
+  12            "iicread16",
+  13            "iicwrite16",
+  14            "enserial",
+  15            "flashprog",
+  16            "mario",
+  17            "deadline",
+  18            "alarm"
+  19          };
+  20          uint8_t (*command_func[])(uint8_t, uint8_t [][COMMAND_MAX_ARG_LEN+1]) = 
+  21          {
+  22            command_iic_check,
+  23            command_iic_read,
+  24            command_iic_write,
+  25            command_iic_read16,
+  26            command_iic_write16,
+  27            command_enable_serial,
+  28            command_flash_program,
+  29            command_mario,
+  30            command_set_deadline,
+  31            command_alarm,
+  32          };
+  33          
+  34          void terminal_init()
+  35          {
+  36   1        oled_clear_sprites();
+  37   1        
+  38   1        bottomline=0; 
+  39   1      }
+  40          
+  41          void terminal_set_big_font(bit en)
+  42          {
+  43   1        bigfont = en;
+  44   1      }
+  45          
+  46          void terminal_set_lines(uint8_t lines)
+  47          {
+  48   1        TERMINAL_LINES = lines;
+  49   1      }
+  50          
+  51          uint8_t terminal_get_arr(uint8_t num)
+  52          {
+  53   1        uint8_t result;
+  54   1        result = bottomline + TERMINAL_LINES+1;
+C51 COMPILER V9.56.0.0   TERMINAL                                                          01/26/2021 18:03:19 PAGE 2   
+
+  55   1        result -= num;
+  56   1        return result % (TERMINAL_LINES+1);
+  57   1      }
+  58          
+  59          void terminal_add_bottom(uint8_t *str)
+  60          {
+  61   1        if(bottomline == 0)
+  62   1        {
+  63   2          bottomline = TERMINAL_LINES;
+  64   2        }
+  65   1        else
+  66   1        {
+  67   2          bottomline--;
+  68   2        }
+  69   1        oled_stop_refresh();
+  70   1        oled_sprite_move_direct(bottomline,0,63);
+  71   1        if(has_gb2312(str) || (bigfont == 1)){
+  72   2          oled_sprite_change_str_gb2312(bottomline, str);
+  73   2        }
+  74   1        else
+  75   1          oled_sprite_change_str_6x8(bottomline, str);
+  76   1        
+  77   1        oled_sprite_move_all_up(oled_sprite_get_height(bottomline));
+  78   1        oled_start_refresh();
+  79   1      }
+  80          
+  81          void terminal_add_top(uint8_t *str)
+  82          {
+  83   1        oled_stop_refresh();
+  84   1        oled_sprite_move_direct(bottomline,0,-8);
+  85   1        if(has_gb2312(str) ||(bigfont == 1))
+  86   1          oled_sprite_change_gb2312(bottomline, 0, -16, str);
+  87   1        else
+  88   1          oled_sprite_change_6x8(bottomline, 0, -8, str);
+  89   1        
+  90   1        oled_sprite_move_all_down(oled_sprite_get_height(bottomline));
+  91   1        oled_start_refresh();
+  92   1        bottomline++;
+  93   1        if(bottomline == TERMINAL_LINES+1)bottomline = 0;
+  94   1      } 
+  95          
+  96          void terminal_modify(uint8_t line, uint8_t *str)
+  97          {
+  98   1        oled_stop_refresh();
+  99   1        if(has_gb2312(str) ||(bigfont == 1))
+ 100   1        {
+ 101   2          oled_sprite_change_str_gb2312(terminal_get_arr(line), str);
+ 102   2        }
+ 103   1        else
+ 104   1          oled_sprite_change_str_6x8(terminal_get_arr(line), str);
+ 105   1        oled_start_refresh();
+ 106   1      }
+ 107          
+ 108          uint8_t proc_command(uint8_t *command)
+ 109          {
+ 110   1        uint8_t args[COMMAND_MAX_ARGS][COMMAND_MAX_ARG_LEN+1];
+ 111   1        uint8_t arg_pos = 0, arg_str_pos = 0, tmp;
+ 112   1        
+ 113   1        tmp = *(command++);
+ 114   1        while(tmp != '\n' && tmp)
+ 115   1        {
+ 116   2          if(tmp == ' ')
+C51 COMPILER V9.56.0.0   TERMINAL                                                          01/26/2021 18:03:19 PAGE 3   
+
+ 117   2          {
+ 118   3            args[arg_pos][arg_str_pos] = 0;
+ 119   3            if(arg_str_pos != 0)
+ 120   3            {
+ 121   4              arg_pos++;
+ 122   4              if(arg_pos == COMMAND_MAX_ARGS)
+ 123   4              {
+ 124   5                return COMMAND_ARG_ERROR;
+ 125   5              }
+ 126   4            }
+ 127   3            arg_str_pos = 0;
+ 128   3          }
+ 129   2          else
+ 130   2          {
+ 131   3            args[arg_pos][arg_str_pos++] = tmp;
+ 132   3            if(arg_str_pos == COMMAND_MAX_ARG_LEN)
+ 133   3            {
+ 134   4              return COMMAND_ARG_ERROR;
+ 135   4            }
+ 136   3          }
+ 137   2          tmp = *(command++);
+ 138   2        }
+ 139   1        args[arg_pos][arg_str_pos] = 0;
+ 140   1        for(tmp = 0; tmp < COMMAND_COUNT; ++tmp)
+ 141   1        {
+ 142   2          if(strcmp(args[0], command_func_name[tmp])==0)
+ 143   2          {
+ 144   3            return (*command_func[tmp])(arg_pos, args);
+ 145   3          }
+ 146   2        }
+ 147   1        return COMMAND_NOT_FOUND;
+ 148   1      }
+ 149          
+ 150          void terminal_add_chr(uint8_t chr)
+ 151          {
+ 152   1        morse_input_str[strPointer++] = chr;
+ 153   1        if(strPointer == MAX_INPUT_STR)strPointer = 0;
+ 154   1        morse_input_str[strPointer] = 0;
+ 155   1        morse_updated = 1;
+ 156   1        if(chr == '\n')
+ 157   1        {
+ 158   2          strPointer = 0;
+ 159   2          morse_finished = 1;
+ 160   2        }
+ 161   1      }
+ 162          void TerminalMode()
+ 163          {
+ 164   1        uint16_t len;
+ 165   1        uint8_t result;
+ 166   1        terminal_init();
+ 167   1        delay10ms(30);
+ 168   1        morse_mode = 1;
+ 169   1        terminal_enable_serial = 1;
+ 170   1        terminal_add_bottom("STC Terminal");
+ 171   1        terminal_add_bottom("");
+ 172   1        terminal_add_bottom("");
+ 173   1        oled_inverse(0, 63-8, 5, 63);
+ 174   1        oled_enable_inverse(1);
+ 175   1        while(1)
+ 176   1        {
+ 177   2          if(morse_updated == 1)
+ 178   2          {
+C51 COMPILER V9.56.0.0   TERMINAL                                                          01/26/2021 18:03:19 PAGE 4   
+
+ 179   3            morse_updated = 0;
+ 180   3            len = strlen(morse_input_str);
+ 181   3            if(len > 20)
+ 182   3            {
+ 183   4              terminal_modify(0, &(morse_input_str[len-20]));
+ 184   4            }
+ 185   3            else
+ 186   3            {
+ 187   4              terminal_modify(0, morse_input_str);
+ 188   4            }
+ 189   3            oled_inverse(oled_sprite_get_width(terminal_get_arr(0)), 63-7, oled_sprite_get_width(terminal_get_arr(0
+             -))+5, 63);
+ 190   3          }
+ 191   2          if(morse_finished == 1)
+ 192   2          {
+ 193   3            morse_finished = 0;
+ 194   3            oled_inverse(0, 64, 4, 64);
+ 195   3            morse_mode = 0;
+ 196   3            keyClear();
+ 197   3            result = proc_command(morse_input_str);
+ 198   3            if(result == COMMAND_NOT_FOUND)terminal_add_bottom("ÕÒ²»µ½ÃüÁî.");
+ 199   3            if(result == COMMAND_ARG_ERROR)terminal_add_bottom("²ÎÊý´íÎó.");
+ 200   3            if(result == COMMAND_ERROR)terminal_add_bottom("Î´Öª´íÎó.");
+ 201   3            if(result == COMMAND_QUIT_TERMINAL)break;
+ 202   3            terminal_add_bottom("");
+ 203   3            morse_mode = 1;
+ 204   3            oled_inverse(0, 63-8, 5, 63);
+ 205   3          }
+ 206   2          if(morse_mode == 0)
+ 207   2          {
+ 208   3            break;
+ 209   3          }
+ 210   2        }
+ 211   1        keyClear();
+ 212   1        oled_clear_sprites();
+ 213   1        oled_inverse(0, 64, 4, 64);
+ 214   1        delay10ms(30);
+ 215   1        return; 
+ 216   1      }
+ 217          
+ 218          uint8_t isint(uint8_t *str)
+ 219          {
+ 220   1        uint8_t chr;
+ 221   1        if(*str == 'm')str++;
+ 222   1        while(chr=*str++)
+ 223   1        {
+ 224   2          if(chr - 0x30 > 9)
+ 225   2          {
+ 226   3            return 0;
+ 227   3          }
+ 228   2        }
+ 229   1        return 1;
+ 230   1      }
+ 231          
+ 232          int16_t getint(uint8_t *str)
+ 233          {
+ 234   1        int16_t result=0;
+ 235   1        uint8_t chr;
+ 236   1        bit minus = 0;
+ 237   1        if(*str == 'm')
+ 238   1        {
+ 239   2          str++;
+C51 COMPILER V9.56.0.0   TERMINAL                                                          01/26/2021 18:03:19 PAGE 5   
+
+ 240   2          minus = 1;
+ 241   2        }
+ 242   1        while(chr = *str++)
+ 243   1        {
+ 244   2          result *= 10;
+ 245   2          result += chr - 0x30;
+ 246   2        }
+ 247   1        if(minus)result *= -1;
+ 248   1        return result;
+ 249   1      }
+ 250          
+ 251          uint8_t gethex8(uint8_t *str)
+ 252          {
+ 253   1        uint8_t tmp;
+ 254   1        uint8_t result;
+ 255   1        
+ 256   1        tmp = str[0];
+ 257   1        if(tmp >= 'a' && tmp <= 'f')
+ 258   1        {
+ 259   2          tmp = tmp - 'a'+ 0x0a;
+ 260   2        }
+ 261   1        else if(tmp >= '0' && tmp <= '9')
+ 262   1        {
+ 263   2          tmp -= '0';
+ 264   2        }
+ 265   1        else
+ 266   1        {
+ 267   2          return 0;
+ 268   2        }
+ 269   1        result = tmp;
+ 270   1        result <<= 4;
+ 271   1        
+ 272   1        tmp = str[1];
+ 273   1        if(tmp >= 'a' && tmp <= 'f')
+ 274   1        {
+ 275   2          tmp = tmp - 'a'+0x0a;
+ 276   2        }
+ 277   1        else if(tmp >= '0' && tmp <= '9')
+ 278   1        {
+ 279   2          tmp -= '0';
+ 280   2        }
+ 281   1        else
+ 282   1        {
+ 283   2          return 0;
+ 284   2        }
+ 285   1        result += tmp;
+ 286   1      
+ 287   1        return result;
+ 288   1      }
+ 289          
+ 290          uint8_t command_enable_serial(COMMAND_ARGS)
+ 291          {
+ 292   1        terminal_enable_serial=1;
+ 293   1        return COMMAND_OK;
+ 294   1      }
+*** WARNING C280 IN LINE 290 OF Terminal.c: 'argc': unreferenced local variable
+*** WARNING C280 IN LINE 290 OF Terminal.c: 'argv': unreferenced local variable
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1162    ----
+   CONSTANT SIZE    =    132    ----
+C51 COMPILER V9.56.0.0   TERMINAL                                                          01/26/2021 18:03:19 PAGE 6   
+
+   XDATA SIZE       =     62     188
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1       2
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

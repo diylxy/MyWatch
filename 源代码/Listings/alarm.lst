@@ -1,0 +1,536 @@
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE ALARM
+OBJECT MODULE PLACED IN .\Objects\alarm.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE alarm.c LARGE OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listin
+                    -gs\alarm.lst) TABS(2) OBJECT(.\Objects\alarm.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          #define CLASS_TYPE_TOTAL 13
+   4          uint8_t* code classtype[CLASS_TYPE_TOTAL+1] =
+   5          {
+   6            "Math",
+   7            "语文",
+   8            "英语",
+   9            "政治",
+  10            "历史",
+  11            "地理",
+  12            "生物",
+  13            "物理",
+  14            "化学",
+  15            "自习",
+  16            "P.E.",
+  17            "班会",
+  18            "音美",
+  19            NULL
+  20          };
+  21          
+  22          uint8_t* code class_manager_menu[] = 
+  23          {
+  24            "新建课程",
+  25            "Delete",
+  26            "格式化",
+  27            "更新RTC",
+  28            "Serial",
+  29            ""
+  30          };
+  31          uint8_t * code class_alarm_type[] = 
+  32          {
+  33            "响一声",
+  34            "倒计时",
+  35            "静音",
+  36          };
+  37          class_t tmpclass;
+  38          class_t current_class;
+  39          uint8_t have_class = 0;
+  40          void rtc_enable_alarm(bit enable)
+  41          {
+  42   1        int_iic_start();   
+  43   1        int_iic_write(RTC_IIC_ADDRESS);
+  44   1        int_iic_write(0x0e);
+  45   1        if(enable == 1)
+  46   1        {
+  47   2          int_iic_write(0x55);
+  48   2        }
+  49   1        else
+  50   1        {
+  51   2          int_iic_write(0x54);
+  52   2        }
+  53   1        int_iic_stop();
+  54   1      }
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 2   
+
+  55          
+  56          uint8_t rtc_alarm_enabled()
+  57          {
+  58   1        uint8_t enable;
+  59   1        int_iic_start();   
+  60   1        int_iic_write(RTC_IIC_ADDRESS);
+  61   1        int_iic_write(0x0e);
+  62   1        int_iic_start();   
+  63   1        int_iic_write(RTC_IIC_ADDRESS+1);
+  64   1        enable = int_iic_read(INTERNAL_IIC_ACK);
+  65   1        int_iic_stop();
+  66   1        if((enable&0x01) == 0x01)
+  67   1          return 1;
+  68   1        return 0;
+  69   1      }
+  70          
+  71          uint16_t rtc_get_alarm()
+  72          {
+  73   1        uint16_t result = 0xff;
+  74   1        int_iic_start();   
+  75   1        int_iic_write(RTC_IIC_ADDRESS);
+  76   1        int_iic_write(0x08);
+  77   1        int_iic_start();   
+  78   1        int_iic_write(RTC_IIC_ADDRESS | 0x01);  
+  79   1        result = int_iic_read(INTERNAL_IIC_ACK);
+  80   1        result |= ((uint16_t)int_iic_read(INTERNAL_IIC_ACK))<<8;
+  81   1        int_iic_stop();
+  82   1        return result;
+  83   1      }
+  84          void rtc_set_alarm(uint16_t time, uint8_t ring_before)
+  85          {
+  86   1        int_iic_start();   
+  87   1        int_iic_write(RTC_IIC_ADDRESS);
+  88   1        int_iic_write(0x07);
+  89   1        if(ring_before == 0)
+  90   1        {
+  91   2          int_iic_write(0);
+  92   2          ring_before = 0;
+  93   2        }
+  94   1        else
+  95   1        {
+  96   2          ring_before %= 60;
+  97   2          int_iic_write(dec_to_bcd(60-(ring_before%60)));
+  98   2          ring_before = 1;
+  99   2        }
+ 100   1        if(time == 0)
+ 101   1        {
+ 102   2          int_iic_write(0);
+ 103   2          int_iic_write(0);
+ 104   2        }
+ 105   1        else
+ 106   1        {
+ 107   2          int_iic_write(dec_to_bcd((time-ring_before)%60));
+ 108   2          int_iic_write(dec_to_bcd((time-ring_before)/60));
+ 109   2        }
+ 110   1        int_iic_write(0x80);
+ 111   1        int_iic_stop();
+ 112   1        rtc_enable_alarm(1);
+ 113   1      }
+ 114          
+ 115          void rtc_clear_alarm_flag()                             //清空RTC状态寄存器
+ 116          {
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 3   
+
+ 117   1        int_iic_write_addr(RTC_IIC_ADDRESS, 0x0f, 0x00);
+ 118   1      }
+ 119          
+ 120          
+ 121          
+ 122          ///////////////////////////////////////////////////////////////////
+ 123          /////////////////////////课程管理///////////////////////////////////
+ 124          ///////////////////////////////////////////////////////////////////
+ 125          
+ 126          void print_class(class_t *cls)
+ 127          {
+ 128   1        oled_inverse(0,0,0,0);
+ 129   1        //if(cls->type > CLASS_TYPE_TOTAL)return;
+ 130   1        oled_sprite_change_gb2312(0,0,0,classtype[cls->type]);
+ 131   1        sprintf(oled_tmpstr, "%02bu:%02bu-%02bu:%02bu", (uint8_t)(cls->begin_min/60),  (uint8_t)(cls->begin_min%6
+             -0),  (uint8_t)(cls->over_min/60),  (uint8_t)(cls->over_min%60));
+ 132   1        oled_sprite_change_gb2312(1,0,15,oled_tmpstr);
+ 133   1        oled_sprite_change_gb2312(2,0,31,class_alarm_type[cls->ring]);
+ 134   1        oled_sprite_change_gb2312(3,64,0,week_arr[cls->week-1]);
+ 135   1      }
+ 136          
+ 137          void class_write(uint8_t classnum, class_t *cls)
+ 138          {
+ 139   1        uint32_t addr;
+ 140   1        addr = classnum;
+ 141   1        addr *= 4096;
+ 142   1        addr += FLASH_ALARM_START;
+ 143   1        flash_erase_sector(addr);
+ 144   1        flash_write(addr, sizeof(class_t), (uint8_t *)cls);
+ 145   1        
+ 146   1      }
+ 147          void class_read(uint8_t classnum, class_t *cls)
+ 148          {
+ 149   1        uint32_t addr;
+ 150   1        addr = classnum;
+ 151   1        addr *= 4096;
+ 152   1        addr += FLASH_ALARM_START;
+ 153   1        flash_read(addr, sizeof(class_t),(uint8_t *)cls);
+ 154   1      }
+ 155          void class_erase(uint8_t classnum)
+ 156          {
+ 157   1        uint32_t addr;
+ 158   1        addr = classnum;
+ 159   1        addr *= 4096;
+ 160   1        addr += FLASH_ALARM_START;
+ 161   1        flash_erase_sector(addr);
+ 162   1      }
+ 163          
+ 164          uint8_t classequ(class_t *cls1, class_t *cls2)
+ 165          {
+ 166   1        uint8_t i;
+ 167   1        for(i=1; i<sizeof(class_t); ++i)
+ 168   1        {
+ 169   2          if(*((uint8_t*)cls1 + i) != *((uint8_t*)cls2 + i))
+ 170   2          {
+ 171   3            return 1;
+ 172   3          }
+ 173   2        }
+ 174   1        return 0;
+ 175   1      }
+ 176          
+ 177          uint8_t class_add(class_t *cls)
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 4   
+
+ 178          {
+ 179   1        uint8_t i;
+ 180   1        for(i=0; i!= 0xff; ++i)
+ 181   1        {
+ 182   2          class_read(i, &tmpclass);
+ 183   2          if(tmpclass.week == 0xff)
+ 184   2          {
+ 185   3            class_write(i, cls);
+ 186   3            return 0;
+ 187   3          }
+ 188   2        }
+ 189   1        return 1;
+ 190   1      }
+ 191          
+ 192          uint8_t class_remove(class_t *cls)
+ 193          {
+ 194   1        uint8_t i;
+ 195   1        for(i=0; i!= 0xff; ++i)
+ 196   1        {
+ 197   2          class_read(i, &tmpclass);
+ 198   2          if(classequ(&tmpclass,cls) == 0)
+ 199   2          {
+ 200   3            class_erase(i);
+ 201   3            return 0;
+ 202   3          }
+ 203   2        }
+ 204   1        return 1;
+ 205   1      }
+ 206          
+ 207          uint8_t class_get_day(uint8_t week, uint8_t classnum, class_t *cls)
+ 208          {
+ 209   1        uint8_t i;
+ 210   1        for(i=0; i<255; ++i)
+ 211   1        {
+ 212   2          class_read(i, &tmpclass);
+ 213   2          if(tmpclass.week == week)
+ 214   2          {
+ 215   3            if(classnum == 0)
+ 216   3            {
+ 217   4              class_read(i, cls);
+ 218   4              return i;
+ 219   4            }
+ 220   3            classnum--;
+ 221   3          }
+ 222   2        }
+ 223   1        return 0xff;
+ 224   1      }
+ 225          
+ 226          
+ 227          void class_update()
+ 228          {
+ 229   1        int16_t min_delta = 32767;
+ 230   1        uint16_t minutenow;
+ 231   1        uint8_t i=0;
+ 232   1        int16_t tmp16;
+ 233   1        class_t tmp;
+ 234   1        rtc_read_time(&current_time);
+ 235   1        minutenow = current_time.hour;
+ 236   1        minutenow *= 60;
+ 237   1        minutenow += current_time.minute;
+ 238   1        minutenow += 2;
+ 239   1        while(class_get_day(current_time.day, i, &tmp)!= 0xff)
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 5   
+
+ 240   1        {
+ 241   2          if((tmp.over_min) > minutenow)
+ 242   2          {
+ 243   3            tmp16 = tmp.over_min - minutenow;
+ 244   3            if(tmp16 < min_delta)
+ 245   3            {
+ 246   4              min_delta = tmp16;
+ 247   4              class_get_day(current_time.day, i, &current_class);
+ 248   4            }
+ 249   3          }
+ 250   2          ++i;
+ 251   2        }
+ 252   1        rtc_enable_alarm(1);  
+ 253   1        if(min_delta < 24 * 60)
+ 254   1        {
+ 255   2          have_class = 1;
+ 256   2          if(current_class.begin_min > minutenow)
+ 257   2          {
+ 258   3            rtc_set_alarm(current_class.begin_min, current_class.ring_before);
+ 259   3          }
+ 260   2          else
+ 261   2          {
+ 262   3            rtc_set_alarm(current_class.over_min, current_class.ring_before);
+ 263   3          }
+ 264   2          return;
+ 265   2        }
+ 266   1        rtc_set_alarm(0, 0);
+ 267   1        current_class.ring = MUTE;
+ 268   1        have_class = 0;
+ 269   1        return;
+ 270   1      }
+ 271          
+ 272          uint8_t menu_ask_class_type()
+ 273          {
+ 274   1        uint8_t i = 0;
+ 275   1        menu_init();
+ 276   1        while(classtype[i] != NULL)
+ 277   1        {
+ 278   2          menu_add(classtype[i]);
+ 279   2          ++i;
+ 280   2        }
+ 281   1        return menu_start("请选择科目")-1;
+ 282   1      }
+ 283          
+ 284          void class_send(class_t* cls)
+ 285          {
+ 286   1        uint8_t i;
+ 287   1        for(i = 0; i < sizeof(class_t); ++i)
+ 288   1        {
+ 289   2          SBUF = *(((uint8_t *)cls)+i);
+ 290   2          while(TI == 0);
+ 291   2          TI = 0;
+ 292   2        }
+ 293   1      }
+ 294          void class_manager()
+ 295          {
+ 296   1        uint8_t result;
+ 297   1        uint8_t week;
+ 298   1        class_t tmp;
+ 299   1        uint8_t tmp_buf, max_cls;
+ 300   1        //req_password();
+ 301   1        while(1)
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 6   
+
+ 302   1        {
+ 303   2          menu_init();
+ 304   2          menu_add(class_manager_menu[0]);
+ 305   2          menu_add(class_manager_menu[1]);
+ 306   2          menu_add(class_manager_menu[2]);
+ 307   2          menu_add(class_manager_menu[3]);
+ 308   2          menu_add(class_manager_menu[4]);
+ 309   2          result = menu_start(NULL);
+ 310   2          switch(result)
+ 311   2          {
+ 312   3            case 0:return;break;
+ 313   3            case 1:                               //新增
+ 314   3              week_jmp:
+ 315   3              result = menu_ask_num(1,8,"请选择星期");
+ 316   3              if(result == 0xff)break;
+ 317   3              tmp.week = result;
+ 318   3              
+ 319   3              type:
+ 320   3              result = menu_ask_class_type();
+ 321   3              if(result == 0xff)goto week_jmp;
+ 322   3              tmp.type = result;
+ 323   3              
+ 324   3              start_h:
+ 325   3              result = menu_ask_num(0,24,"上课时间(时)");
+ 326   3              if(result == 0xff)goto type;
+ 327   3              tmp.begin_min = result;
+ 328   3              tmp.begin_min *= 60;
+ 329   3              result = menu_ask_num(0,60,"上课时间(分)");
+ 330   3              if(result == 0xff)goto start_h;
+ 331   3              tmp.begin_min += result;
+ 332   3            
+ 333   3              over_h:
+ 334   3              result = menu_ask_num(0,24,"下课时间(时)");
+ 335   3              if(result == 0xff)goto start_h;
+ 336   3              tmp.over_min = result;
+ 337   3              tmp.over_min *= 60;
+ 338   3              result = menu_ask_num(0,60,"下课时间(分)");
+ 339   3              if(result == 0xff)goto over_h;
+ 340   3              tmp.over_min += result;
+ 341   3              alert:
+ 342   3              menu_init();
+ 343   3              menu_add("响一声");
+ 344   3              menu_add("倒计时");
+ 345   3              menu_add("静音");
+ 346   3              result = menu_start("设置提醒");
+ 347   3              result--;
+ 348   3              if(result == 0xff)goto over_h;
+ 349   3              tmp.ring = result;
+ 350   3              if(result != MUTE)
+ 351   3              {
+ 352   4                result = menu_ask_num(0,60,NULL);
+ 353   4                if(result == 0xff)goto alert;
+ 354   4                tmp.ring_before = result;
+ 355   4              }
+ 356   3              else
+ 357   3              {
+ 358   4                tmp.ring_before = 0;
+ 359   4              }
+ 360   3              oled_clear_sprites();
+ 361   3              print_class(&tmp);
+ 362   3              delay10ms(100);
+ 363   3              pop_msg("是否保存？");
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 7   
+
+ 364   3              result = menu_ask_yn(NULL);
+ 365   3              if(result == 0xff)goto alert;
+ 366   3              if(result == 1)
+ 367   3              {
+ 368   4                if(class_add(&tmp) == 0)
+ 369   4                {
+ 370   5                  pop_msg("保存成功");
+ 371   5                }
+ 372   4                else
+ 373   4                {
+ 374   5                  pop_msg("保存失败");
+ 375   5                }
+ 376   4              }
+ 377   3              class_update();
+ 378   3              break;
+ 379   3            case 2:                                   //删除
+ 380   3              result = menu_ask_num(1,8,"请选择星期");
+ 381   3              if(result == 0xff)break;
+ 382   3              week = result;
+ 383   3              result = 0;
+ 384   3              reselect_class:
+ 385   3              menu_init();
+ 386   3              while(class_get_day(week, result, &tmp) != 0xff)
+ 387   3              {
+ 388   4                menu_add(classtype[tmp.type]);
+ 389   4                result++;
+ 390   4              }
+ 391   3              result = menu_start("课程表");
+ 392   3              if(result == 0)break;
+ 393   3              result--;
+ 394   3              class_get_day(week, result, &tmp);
+ 395   3              oled_clear_sprites();
+ 396   3              print_class(&tmp);
+ 397   3              keyUp.pressed = 0;
+ 398   3              keyDown.pressed = 0;
+ 399   3              while(keyUp.pressed == 0);
+ 400   3              result = menu_ask_yn("是否删除");
+ 401   3              if(result == 0xff)break;
+ 402   3              else if(result == 1)
+ 403   3              {
+ 404   4                class_remove(&tmp);
+ 405   4              }
+ 406   3              else if(result == 0)goto reselect_class;
+ 407   3              class_update();
+ 408   3              break;
+ 409   3            case 3:
+ 410   3              req_password();
+ 411   3              result = menu_ask_yn("确认？");
+ 412   3              if(result == 1)
+ 413   3              {
+ 414   4                keep_screen_on = 1;
+ 415   4                for(result = 0; result != 255; ++result)
+ 416   4                {
+ 417   5                  class_erase(result);
+ 418   5                }
+ 419   4                keep_screen_on = 0;
+ 420   4                pop_msg("成功");
+ 421   4              }
+ 422   3              break;
+ 423   3            case 4:
+ 424   3              class_update();
+ 425   3              pop_msg("RTC 已更新");
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 8   
+
+ 426   3              break;
+ 427   3            case 5:
+ 428   3              oled_sprite_change_gb2312(0,0,0, "按下上键退出");
+ 429   3              ES = 0;
+ 430   3              keep_screen_on = 1;
+ 431   3              delay10ms(50);
+ 432   3              oled_stop_refresh();
+ 433   3              while(KEY_UP == 1)
+ 434   3              {
+ 435   4                if(RI == 1)
+ 436   4                {
+ 437   5                  RI = 0;
+ 438   5                  tmp_buf = SBUF;
+ 439   5                  if(tmp_buf == 'r')
+ 440   5                  {
+ 441   6                    for(tmp_buf = 0; tmp_buf != 0xff; ++tmp_buf)
+ 442   6                    {
+ 443   7                      class_read(tmp_buf, &tmp);
+ 444   7                      class_send(&tmp);
+ 445   7                    }
+ 446   6                  }
+ 447   5                  else if(tmp_buf == 'w')
+ 448   5                  {
+ 449   6                    SBUF = 'o';
+ 450   6                    while(TI == 0);
+ 451   6                    TI = 0;
+ 452   6                    while(RI == 0);
+ 453   6                    RI = 0;
+ 454   6                    max_cls = SBUF;
+ 455   6                    for(result = 0; result != max_cls; ++result)
+ 456   6                    {
+ 457   7                      for(tmp_buf = 0; tmp_buf < sizeof(class_t); ++tmp_buf)
+ 458   7                      {
+ 459   8                        while(RI == 0);
+ 460   8                        RI = 0;
+ 461   8                        *(((uint8_t *)&tmp)+tmp_buf) = SBUF;
+ 462   8                      }
+ 463   7                      class_write(result, &tmp);
+ 464   7                      SBUF = 'o';
+ 465   7                      while(TI == 0);
+ 466   7                      TI = 0;
+ 467   7                    }
+ 468   6                  }
+ 469   5                }
+ 470   4              }
+ 471   3              oled_start_refresh();
+ 472   3              ES = 1;
+ 473   3              class_update();
+ 474   3              keep_screen_on = 0;
+ 475   3              keyClear();
+ 476   3            default:
+ 477   3              break;
+ 478   3          }
+ 479   2        }
+ 480   1      }
+ 481          
+ 482          uint8_t command_alarm(COMMAND_ARGS)
+ 483          {
+ 484   1        uint8_t hour; 
+ 485   1        uint8_t minute;
+ 486   1        if(argc != 2)return COMMAND_ARG_ERROR;
+ 487   1        
+C51 COMPILER V9.56.0.0   ALARM                                                             01/26/2021 18:03:20 PAGE 9   
+
+ 488   1        hour =getint(argv[1]); 
+ 489   1        minute =getint(argv[2]);
+ 490   1        
+ 491   1        rtc_set_alarm(hour*60+minute, 0);
+ 492   1        current_class.ring = ONCE;
+ 493   1        terminal_add_bottom("闹钟已设置");
+ 494   1        return COMMAND_OK;
+ 495   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2448    ----
+   CONSTANT SIZE    =    390    ----
+   XDATA SIZE       =     17      80
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

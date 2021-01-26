@@ -1,0 +1,122 @@
+C51 COMPILER V9.56.0.0   MPU6050                                                           01/10/2021 21:14:17 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MPU6050
+OBJECT MODULE PLACED IN .\Objects\mpu6050.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE mpu6050.c LARGE OPTIMIZE(0,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\List
+                    -ings\mpu6050.lst) TABS(2) OBJECT(.\Objects\mpu6050.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          
+   3          
+   4          
+   5          int16_t mpu6050_x_zero=0, mpu6050_y_zero = 0, mpu6050_z_zero = 0;
+   6          
+   7          int16_t mpu6050_getdata(uint8_t REG_Address)   
+   8          {   
+   9   1        uint8_t H,L;   
+  10   1        int16_t adv = 0;
+  11   1        H=int_iic_read_addr(MPU6050_ADDR, REG_Address);   
+  12   1        L=int_iic_read_addr(MPU6050_ADDR, REG_Address+1);  
+  13   1        adv = (H<<8)+L;
+  14   1        return adv;
+  15   1      }
+  16          
+  17          void mpu6050_init()   
+  18          {
+  19   1        int_iic_write_addr(MPU6050_ADDR, PWR_MGMT_1, 0x00);  //?????????   
+  20   1        delay10ms(50);
+  21   1        int_iic_write_addr(MPU6050_ADDR, SMPLRT_DIV, 0x07);   
+  22   1        int_iic_write_addr(MPU6050_ADDR, CONFIG, 0x00);   
+  23   1        int_iic_write_addr(MPU6050_ADDR, GYRO_CONFIG, 0x18);   
+  24   1        int_iic_write_addr(MPU6050_ADDR, ACCEL_CONFIG, 0x00);   
+  25   1      //    int_iic_write_addr(MPU6050_ADDR, 0X37, 0x9c);   
+  26   1      //    int_iic_write_addr(MPU6050_ADDR, 0X38, 0X40);   
+  27   1      //    int_iic_write_addr(MPU6050_ADDR, 0X1F, 0XEA);   
+  28   1      //    int_iic_write_addr(MPU6050_ADDR, 0X69, 0X30);   
+  29   1      //    int_iic_write_addr(MPU6050_ADDR, 0X20, 0X01);   
+  30   1      //    int_iic_write_addr(MPU6050_ADDR, 0X6C, 0XC0);   
+  31   1      }
+  32          
+  33          void mpu6050_zero()
+  34          {
+  35   1        
+  36   1      }
+  37          
+  38          
+  39          uint8_t command_mpu6050(COMMAND_ARGS)
+  40          {
+  41   1        uint8_t addr = ACCEL_XOUT_H;
+  42   1        mpu6050_init();
+  43   1        oled_stop_refresh();
+  44   1        graph_init();
+  45   1        graph_move_axis(127);
+  46   1        keep_screen_on = 1;
+  47   1        while(1)
+  48   1        {
+  49   2          delay10ms(10);
+  50   2          graph_add_num((float)mpu6050_getdata(addr)/2000);
+  51   2          if(KEY_DOWN == 0)
+  52   2          {
+  53   3            ignore_next_key = 1;
+  54   3            while(KEY_DOWN == 0);
+C51 COMPILER V9.56.0.0   MPU6050                                                           01/10/2021 21:14:17 PAGE 2   
+
+  55   3            delay10ms(1);
+  56   3            keyClear();
+  57   3            while(1)
+  58   3            {
+  59   4              if(keyUp.pressed)
+  60   4              {
+  61   5                keyUp.pressed = 0;
+  62   5                graph_move_axis(-1);
+  63   5              }
+  64   4              else if(keyUp.longpressed)
+  65   4              {
+  66   5                keyUp.longpressed = 0;
+  67   5                addr += 2;
+  68   5                if(addr >= 0x4a) addr = ACCEL_XOUT_H;
+  69   5                sprintf(oled_tmpstr, "addr:0x%bx", addr);
+  70   5                oled_draw_6x8(10,1,oled_tmpstr);
+  71   5                oled_send_buffer();
+  72   5                delay10ms(100);
+  73   5                break;
+  74   5              }
+  75   4              
+  76   4              if(keyDown.pressed)
+  77   4              {
+  78   5                keyDown.pressed = 0;
+  79   5                graph_move_axis(1);
+  80   5              }
+  81   4              else if(keyDown.longpressed)
+  82   4              {
+  83   5                keyDown.longpressed = 0;
+  84   5                goto end;
+  85   5              }
+  86   4            }
+  87   3          }
+  88   2        }
+  89   1        end:
+  90   1        //keyClear();
+  91   1        keep_screen_on = 0;
+  92   1        oled_start_refresh();
+  93   1        return COMMAND_OK;
+  94   1      }
+*** WARNING C280 IN LINE 39 OF mpu6050.c: 'argc': unreferenced local variable
+*** WARNING C280 IN LINE 39 OF mpu6050.c: 'argv': unreferenced local variable
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    432    ----
+   CONSTANT SIZE    =     11    ----
+   XDATA SIZE       =     16    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)
