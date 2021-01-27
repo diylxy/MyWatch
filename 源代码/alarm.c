@@ -4,35 +4,35 @@
 uint8_t* code classtype[CLASS_TYPE_TOTAL+1] =
 {
 	"Math",
-	"ÓïÎÄ",
-	"Ó¢Óï",
-	"ÕşÖÎ",
-	"ÀúÊ·",
-	"µØÀí",
-	"ÉúÎï",
-	"ÎïÀí",
-	"»¯Ñ§",
-	"×ÔÏ°",
+	"è¯­æ–‡",
+	"è‹±è¯­",
+	"æ”¿æ²»",
+	"å†å²",
+	"åœ°ç†",
+	"ç”Ÿç‰©",
+	"ç‰©ç†",
+	"åŒ–å­¦",
+	"è‡ªä¹ ",
 	"P.E.",
-	"°à»á",
-	"ÒôÃÀ",
+	"ç­ä¼š",
+	"éŸ³ç¾",
 	NULL
 };
 
 uint8_t* code class_manager_menu[] = 
 {
-	"ĞÂ½¨¿Î³Ì",
+	"æ–°å»ºè¯¾ç¨‹",
 	"Delete",
-	"¸ñÊ½»¯",
-	"¸üĞÂRTC",
+	"æ ¼å¼åŒ–",
+	"æ›´æ–°RTC",
 	"Serial",
 	""
 };
 uint8_t * code class_alarm_type[] = 
 {
-	"ÏìÒ»Éù",
-	"µ¹¼ÆÊ±",
-	"¾²Òô",
+	"å“ä¸€å£°",
+	"å€’è®¡æ—¶",
+	"é™éŸ³",
 };
 class_t tmpclass;
 class_t current_class;
@@ -112,7 +112,7 @@ void rtc_set_alarm(uint16_t time, uint8_t ring_before)
 	rtc_enable_alarm(1);
 }
 
-void rtc_clear_alarm_flag()															//Çå¿ÕRTC×´Ì¬¼Ä´æÆ÷
+void rtc_clear_alarm_flag()															//æ¸…ç©ºRTCçŠ¶æ€å¯„å­˜å™¨
 {
 	int_iic_write_addr(RTC_IIC_ADDRESS, 0x0f, 0x00);
 }
@@ -120,7 +120,7 @@ void rtc_clear_alarm_flag()															//Çå¿ÕRTC×´Ì¬¼Ä´æÆ÷
 
 
 ///////////////////////////////////////////////////////////////////
-/////////////////////////¿Î³Ì¹ÜÀí///////////////////////////////////
+/////////////////////////è¯¾ç¨‹ç®¡ç†///////////////////////////////////
 ///////////////////////////////////////////////////////////////////
 
 void print_class(class_t *cls)
@@ -278,7 +278,7 @@ uint8_t menu_ask_class_type()
 		menu_add(classtype[i]);
 		++i;
 	}
-	return menu_start("ÇëÑ¡Ôñ¿ÆÄ¿")-1;
+	return menu_start("è¯·é€‰æ‹©ç§‘ç›®")-1;
 }
 
 void class_send(class_t* cls)
@@ -310,9 +310,9 @@ void class_manager()
 		switch(result)
 		{
 			case 0:return;break;
-			case 1:																//ĞÂÔö
+			case 1:																//æ–°å¢
 				week_jmp:
-				result = menu_ask_num(1,8,"ÇëÑ¡ÔñĞÇÆÚ");
+				result = menu_ask_num(1,8,"è¯·é€‰æ‹©æ˜ŸæœŸ");
 				if(result == 0xff)break;
 				tmp.week = result;
 				
@@ -322,28 +322,28 @@ void class_manager()
 				tmp.type = result;
 				
 				start_h:
-				result = menu_ask_num(0,24,"ÉÏ¿ÎÊ±¼ä(Ê±)");
+				result = menu_ask_num(0,24,"ä¸Šè¯¾æ—¶é—´(æ—¶)");
 				if(result == 0xff)goto type;
 				tmp.begin_min = result;
 				tmp.begin_min *= 60;
-				result = menu_ask_num(0,60,"ÉÏ¿ÎÊ±¼ä(·Ö)");
+				result = menu_ask_num(0,60,"ä¸Šè¯¾æ—¶é—´(åˆ†)");
 				if(result == 0xff)goto start_h;
 				tmp.begin_min += result;
 			
 				over_h:
-				result = menu_ask_num(0,24,"ÏÂ¿ÎÊ±¼ä(Ê±)");
+				result = menu_ask_num(0,24,"ä¸‹è¯¾æ—¶é—´(æ—¶)");
 				if(result == 0xff)goto start_h;
 				tmp.over_min = result;
 				tmp.over_min *= 60;
-				result = menu_ask_num(0,60,"ÏÂ¿ÎÊ±¼ä(·Ö)");
+				result = menu_ask_num(0,60,"ä¸‹è¯¾æ—¶é—´(åˆ†)");
 				if(result == 0xff)goto over_h;
 				tmp.over_min += result;
 				alert:
 				menu_init();
-				menu_add("ÏìÒ»Éù");
-				menu_add("µ¹¼ÆÊ±");
-				menu_add("¾²Òô");
-				result = menu_start("ÉèÖÃÌáĞÑ");
+				menu_add("å“ä¸€å£°");
+				menu_add("å€’è®¡æ—¶");
+				menu_add("é™éŸ³");
+				result = menu_start("è®¾ç½®æé†’");
 				result--;
 				if(result == 0xff)goto over_h;
 				tmp.ring = result;
@@ -360,24 +360,24 @@ void class_manager()
 				oled_clear_sprites();
 				print_class(&tmp);
 				delay10ms(100);
-				pop_msg("ÊÇ·ñ±£´æ£¿");
+				pop_msg("æ˜¯å¦ä¿å­˜ï¼Ÿ");
 				result = menu_ask_yn(NULL);
 				if(result == 0xff)goto alert;
 				if(result == 1)
 				{
 					if(class_add(&tmp) == 0)
 					{
-						pop_msg("±£´æ³É¹¦");
+						pop_msg("ä¿å­˜æˆåŠŸ");
 					}
 					else
 					{
-						pop_msg("±£´æÊ§°Ü");
+						pop_msg("ä¿å­˜å¤±è´¥");
 					}
 				}
 				class_update();
 				break;
-			case 2:																		//É¾³ı
-				result = menu_ask_num(1,8,"ÇëÑ¡ÔñĞÇÆÚ");
+			case 2:																		//åˆ é™¤
+				result = menu_ask_num(1,8,"è¯·é€‰æ‹©æ˜ŸæœŸ");
 				if(result == 0xff)break;
 				week = result;
 				result = 0;
@@ -388,7 +388,7 @@ void class_manager()
 					menu_add(classtype[tmp.type]);
 					result++;
 				}
-				result = menu_start("¿Î³Ì±í");
+				result = menu_start("è¯¾ç¨‹è¡¨");
 				if(result == 0)break;
 				result--;
 				class_get_day(week, result, &tmp);
@@ -397,7 +397,7 @@ void class_manager()
 				keyUp.pressed = 0;
 				keyDown.pressed = 0;
 				while(keyUp.pressed == 0);
-				result = menu_ask_yn("ÊÇ·ñÉ¾³ı");
+				result = menu_ask_yn("æ˜¯å¦åˆ é™¤");
 				if(result == 0xff)break;
 				else if(result == 1)
 				{
@@ -407,8 +407,8 @@ void class_manager()
 				class_update();
 				break;
 			case 3:
-				req_password();
-				result = menu_ask_yn("È·ÈÏ£¿");
+				//req_password();
+				result = menu_ask_yn("ç¡®è®¤ï¼Ÿ");
 				if(result == 1)
 				{
 					keep_screen_on = 1;
@@ -417,15 +417,15 @@ void class_manager()
 						class_erase(result);
 					}
 					keep_screen_on = 0;
-					pop_msg("³É¹¦");
+					pop_msg("æˆåŠŸ");
 				}
 				break;
 			case 4:
 				class_update();
-				pop_msg("RTC ÒÑ¸üĞÂ");
+				pop_msg("RTC å·²æ›´æ–°");
 				break;
 			case 5:
-				oled_sprite_change_gb2312(0,0,0, "°´ÏÂÉÏ¼üÍË³ö");
+				oled_sprite_change_gb2312(0,0,0, "æŒ‰ä¸‹ä¸Šé”®é€€å‡º");
 				ES = 0;
 				keep_screen_on = 1;
 				delay10ms(50);
@@ -490,6 +490,6 @@ uint8_t command_alarm(COMMAND_ARGS)
 	
 	rtc_set_alarm(hour*60+minute, 0);
 	current_class.ring = ONCE;
-	terminal_add_bottom("ÄÖÖÓÒÑÉèÖÃ");
+	terminal_add_bottom("é—¹é’Ÿå·²è®¾ç½®");
 	return COMMAND_OK;
 }
